@@ -1,12 +1,14 @@
 from PyQt5.QtWidgets import QWidget, QSplitter, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTreeWidget, \
-    QTextEdit, QTableWidgetItem, QComboBox
-from PyQt5 import QtCore
+    QTextEdit, QTableWidgetItem, QComboBox, QItemDelegate, QLineEdit
+from PyQt5 import QtCore, QtGui
 # from xQuery import XQuery
 from table import SelectedTable
 from widgets.xTableWidget import XTableWidget
 from typing import Dict
 from collections import Counter
+from PyQt5.QtCore import Qt
 import pandas as pd
+import xQuery
 
 
 class UnionsWidget(QWidget):
@@ -38,7 +40,7 @@ class UnionsWidget(QWidget):
         self.unions.setColumnCount(3)
         self.unions.setHorizontalHeaderLabels(['Таблица 1', 'Вид связи', 'Таблица 2'])
         self.unions.horizontalHeader().setStretchLastSection(True)
-        self.unions.verticalHeader().hide()
+        # self.unions.verticalHeader().hide()
 
         self.conditionsWidget = QWidget()
         self.conditionsWidget.setLayout(QVBoxLayout())
@@ -63,17 +65,62 @@ class UnionsWidget(QWidget):
 
     def addUnion(self) -> None:
         """NoDocumentation"""
-        row = self.unions.rowCount()
-        selectedTables: dict = self.query.selectedTables
-        if len(selectedTables) == row + 1:
+        union = self.query.addAndGetUnionAuto()
+        if union == None:
             return
+        row = self.unions.rowCount()
+        self.unions.setRowCount(row+1)
 
-        # self.query.unions
-        self.unions.setRowCount(row + 1)
-        for aliasTable, _ in selectedTables.items():
-            if
-        # self.unions.setCellWidget(row, 0, )
-        item = QTableWidgetItem()
+        w = QWidget()
+        # w.setContentsMargins(0, 0, 0, 0)
+        w.setLayout(QHBoxLayout())
+        ch = self.getComboBoxTableSelection()
+        ch.setCurrentText(union.table1.alias)
+        w.layout().setContentsMargins(0, 0, 0, 0)
+        w.layout().addWidget(ch)
+        self.unions.setCellWidget(row, 0, w)
+
+        w = QWidget()
+        w.setLayout(QHBoxLayout())
+        ch = self.getComboBoxTypeUnionSelection()
+        w.layout().addWidget(ch)
+        w.layout().setContentsMargins(0, 0, 0, 0)
+        self.unions.setCellWidget(row, 1, w)
+
+        w = QWidget()
+        w.setLayout(QHBoxLayout())
+        ch = self.getComboBoxTableSelection()
+        ch.setCurrentText(union.table2.alias)
+        w.layout().addWidget(ch)
+        w.layout().setContentsMargins(0, 0, 0, 0)
+        self.unions.setCellWidget(row, 2, w)
+
+
+
+
+
+    def getComboBoxTableSelection(self) -> QComboBox:
+        """NoDocumentation"""
+        res = QComboBox()
+        res.setLineEdit(QLineEdit())
+        res.lineEdit().setReadOnly(True)
+        res.setStyleSheet("QComboBox { qproperty-frame: false }");
+        for tableAlias, selectedTable in self.query.selectedTables.items():
+            res.addItem(tableAlias, selectedTable)
+        return res
+
+    def getComboBoxTypeUnionSelection(self) -> QComboBox:
+        """NoDocumentation"""
+        res = QComboBox()
+        res.setLineEdit(QLineEdit())
+        res.lineEdit().setReadOnly(True)
+        res.setStyleSheet("QComboBox { qproperty-frame: false }");
+        res.setEditable(True)
+        # res.setStyleSheet('QComboBox::drop-down {width: 20px;}')
+        # res.setEditable(True)
+        for typeUnion in ('INNER', 'OUTER', 'LEFT', 'RIGHT'):
+            res.addItem(typeUnion)
+        return res
 
     def alowedAddTableForUnion(self, aliasTable: str, row: int, firstColumn: bool) -> bool:
         """NoDocumentation"""
@@ -131,3 +178,7 @@ class UnionsWidget(QWidget):
     def getComboBox(self, selectedTables: Dict[str, SelectedTable], column: int) -> None:
         """NoDocumentation"""
         pass
+
+
+
+

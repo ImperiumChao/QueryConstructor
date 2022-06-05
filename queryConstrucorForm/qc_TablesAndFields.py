@@ -118,10 +118,10 @@ class TablesAndFieldsWidget(QWidget):
 
         if type(_object) is Table:
             table = _object
-            selectedTable = qc.XQuery.addAndGetSelectedTable(self.query, table)
+            selectedTable = self.query.addAndGetSelectedTable(table)
         elif type(_object) is FieldTable:
             table = _object.table
-            selectedTable = qc.XQuery.addAndGetSelectedTable(self.query, table)
+            selectedTable = self.query.addAndGetSelectedTable(table)
 
             self.addFieldToSelectedFields(selectedTable.getSelectedField(_object))
         else:
@@ -132,12 +132,12 @@ class TablesAndFieldsWidget(QWidget):
         """NoDocumentation"""
 
         if type(_object) is Table:
-            selectedTable = qc.XQuery.addAndGetSelectedTable(self.query, _object)
+            selectedTable = self.query.addAndGetSelectedTable(_object)
             self.addTableToSelectedTables(selectedTable)
             for _, selectedField in selectedTable.fields.items():
                 self.addFieldToSelectedFields(selectedField)
         elif type(_object) is FieldTable:
-            selectedTable = qc.XQuery.addAndGetSelectedTable(self.query, _object.table)
+            selectedTable = self.query.addAndGetSelectedTable(_object.table)
             self.addTableToSelectedTables(selectedTable)
             self.addFieldToSelectedFields(selectedTable.getSelectedField(_object))
         elif type(_object) is SelectedTable:
