@@ -4,13 +4,32 @@ from queryConstrucorForm.queryConstructor import QueryConstructor
 from expression import Expression
 from collections import OrderedDict
 from typing import Dict, List, Union, Tuple
+import pandas as pd
 
 class UnionTables():
     def __init__(self, query, table1: SelectedTable, union: str, table2: SelectedTable):
+        self.query = query
         self.table1 = table1
         self.union = union
         self.table2 = table2
         self.conditions: List[Expression] = list()
+
+    def setTypeUnion(self, typeUnion: str) -> None:
+        """NoDocumentation"""
+        self.union = typeUnion
+
+    def setTable1(self, table: SelectedTable) -> None:
+        """NoDocumentation"""
+        self.table1 = table
+
+    def setTable2(self, table: SelectedTable) -> None:
+        """NoDocumentation"""
+        self.table2 = table
+
+    def addCondition(self, expression: Expression) -> None:
+        """NoDocumentation"""
+        self.conditions.append(expression)
+
 
 class XQuery(QSqlQuery):
     availableTables: Dict[str, Table] = dict()
@@ -18,7 +37,7 @@ class XQuery(QSqlQuery):
     def __init__(self):
         super().__init__()
         self.selectedTables: Dict[str, SelectedTable] = OrderedDict()
-        self.fields: Dict[str, SelectedTable] = OrderedDict()
+        self.fields: Dict[str, Expression] = OrderedDict()
         self.unions: List[UnionTables] = list()
         self.joins: List['XQuery'] = list()
         self.conditions: List[Expression] = list()
@@ -64,7 +83,7 @@ class XQuery(QSqlQuery):
             i = 1
             while True:
                 alias = selectedFieldTable.name + str(i)
-                if alias in query.fields:
+                if alias in self.fields:
                     i += 1
                 else:
                     break
@@ -73,20 +92,18 @@ class XQuery(QSqlQuery):
         self.fields[alias] = expression
         return expression
 
-    @staticmethod
-    def deleteSelectedTable(query: "XQuery", selectedTable: SelectedTable) -> None:
+    def deleteSelectedTable(self, selectedTable: SelectedTable) -> None:
         """NoDocumentation"""
-        del query.selectedTables[selectedTable.alias]
+        del self.selectedTables[selectedTable.alias]
 
-
-    @staticmethod
-    def deleteSelectedField(query: "XQuery", expression: Expression) -> None:
+    def deleteSelectedField(self, expression: Expression) -> None:
         """NoDocumentation"""
-        query.fields.remove(expression)
+        del self.fields[expression.alias]
 
     def addAndGetUnionAuto(self) -> Union[UnionTables, None]:
         """NoDocumentation"""
-
+        if len(self.selectedTables) < 2:
+            return None
         alreadyUnitedTables = set()
         table1 = list(self.selectedTables.values())[0]
         alreadyUnitedTables.add(table1)
@@ -105,8 +122,9 @@ class XQuery(QSqlQuery):
                 self.unions.append(unionTables)
                 return unionTables
 
-
-
+    def deleteUnion(self, union) -> None:
+        """NoDocumentation"""
+        self.unions.remove(union)
 
     @classmethod
     def updateAvailableTables(cls):
@@ -119,7 +137,18 @@ class XQuery(QSqlQuery):
             sql = query.value('sql')
             cls.availableTables[name] = Table(name, sql)
 
+    def getPandasDataFrameUnions(self) -> pd.DataFrame:
+        """NoDocumentation"""
+        res = pd.DataFrame(columns=('aliasTable1', 'union', 'aliasTable2'))
 
+        for union in self.unions:
+            res.append({'aliasTable1': union.table1.alias, 'union': union.union, 'aliasTable2': union.table2.alias})
+
+        return res
+
+    def checkUnionsQuery(self) -> bool:
+        """NoDocumentation"""
+        pass
 
 
 

@@ -12,6 +12,7 @@ class XTableWidget(QTableWidget):
     mouseRightButtonPressed = pyqtSignal(object)
     mouseDoubleClicked = pyqtSignal(object)
     mouseMiddleButtonPressed = pyqtSignal(object)
+    mouseLeftButtonPressed = pyqtSignal(object)
     delete = pyqtSignal(object)
 
     def __init__(self):
@@ -59,9 +60,13 @@ class XTableWidget(QTableWidget):
         button = event.button()
         if button == Qt.RightButton:
             self.mouseRightButtonPressed.emit(currentItem._object)
+            print('mouseRightButtonPressed')
         elif button == Qt.MiddleButton:
             self.mouseMiddleButtonPressed.emit(currentItem._object)
+            print('mouseMiddleButtonPressed')
         else:
+            self.mouseLeftButtonPressed.emit(currentItem._object)
+            print('mouseLeftButtonPressed')
             super().mousePressEvent(event)
 
     def mouseDoubleClickEvent(self, e: QtGui.QMouseEvent) -> None:

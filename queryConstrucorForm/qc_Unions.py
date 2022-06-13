@@ -1,19 +1,41 @@
 from PyQt5.QtWidgets import QWidget, QSplitter, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTreeWidget, \
-    QTextEdit, QTableWidgetItem, QComboBox, QItemDelegate, QLineEdit
+    QTextEdit, QTableWidgetItem, QComboBox, QLineEdit, QTreeWidgetItem, QShortcut
 from PyQt5 import QtCore, QtGui
 # from xQuery import XQuery
 from table import SelectedTable
 from widgets.xTableWidget import XTableWidget
+from widgets.xTreeWidget import XTreeWidget
 from typing import Dict
 from collections import Counter
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
+from expression import Expression
+from widgets.expressionEditor import ExpressonEditor
 import pandas as pd
 import xQuery
 
+class XComboBox(QComboBox):
+    def __init__(self):
+        super().__init__()
+
+class XLineEdit(QLineEdit):
+    selectedUnion = pyqtSignal(object)
+
+    def __init__(self):
+        super().__init__()
+
+    def mousePressEvent(self, e: QtGui.QMouseEvent) -> None:
+        self.selectedUnion.emit(self.union)
+        super().mousePressEvent(e)
 
 class UnionsWidget(QWidget):
     def __init__(self, query: "XQuery"):
         super().__init__()
+
+        self.deleteshortcut = QShortcut(self)
+        self.deleteshortcut.setKey(Qt.Key_Delete)
+        self.deleteshortcut.activated.connect(self.deleteObject)
+
+        self.currentUnion = None
         self.query = query
         self.layout = QHBoxLayout()
         self.setLayout(self.layout)
@@ -57,11 +79,80 @@ class UnionsWidget(QWidget):
         self.conditionsPanelWidget.layout().setContentsMargins(0, 0, 0, 0)
 
         self.conditionsUnions = XTableWidget()
+        self.conditionsUnions.setColumnCount(1)
+        self.conditionsUnions.setHorizontalHeaderLabels(['Условия'])
+        self.conditionsUnions.horizontalHeader().setStretchLastSection(True)
         self.conditionsWidget.layout().addWidget(self.conditionsUnions)
+        self.conditionsUnions.mouseDoubleClicked.connect(self.editExpression)
+
+    def editExpression(self, expression: Expression) -> None:
+        """NoDocumentation"""
+        self.selectedTables = XTreeWidget()
+        for name, table in self.query.selectedTables.items():
+            itemTable = QTreeWidgetItem()
+            itemTable.setText(0, name)
+            itemTable._object = table
+            for field in table.fields.values():
+                itemChield = QTreeWidgetItem()
+                itemChield.setText(0, field.name)
+                itemChield._object = field
+                itemTable.addChild(itemChield)
+            self.selectedTables.addTopLevelItem(itemTable)
+
+        self.expressonEditor = ExpressonEditor(self, self.selectedTables, expression)
+        self.expressonEditor.show()
+        self.expressonEditor.expressionEdited.connect(self.expressionEdited)
+
+    def deleteObject(self) -> None:
+        """NoDocumentation"""
+        if self.conditionsUnions.hasFocus():
+            currentItem = self.conditionsUnions.currentItem()
+            currentRow = self.conditionsUnions.currentRow()
+            if currentItem == None:
+                return
+            expression = currentItem._object
+            self.conditionsUnions.removeRow(currentRow)
+            self.currentUnion.conditions.remove(expression)
+        else:
+            currentRow = self.unions.currentRow()
+            if currentRow < 0:
+                return
+            union = self.query.unions[currentRow]
+            self.unions.removeRow(currentRow)
+            self.query.deleteUnion(union)
+            if self.unions.rowCount() != 0:
+                self.unions.selectRow(0)
+                self.setCurrentUnion(self.unions.cellWidget(0, 0).comboBox.union)
+            else:
+                self.setCurrentUnion(None)
+
+        self.updateConditionsUnion()
+
 
     def addCondition(self) -> None:
         """NoDocumentation"""
-        pass
+        expression = Expression(self.query)
+        self.currentUnion.addCondition(expression)
+        self.updateConditionsUnion()
+        self.selectedTables = XTreeWidget()
+        for name, table in self.query.selectedTables.items():
+            itemTable = QTreeWidgetItem()
+            itemTable.setText(0, name)
+            itemTable._object = table
+            for field in table.fields.values():
+                itemChield = QTreeWidgetItem()
+                itemChield.setText(0, field.name)
+                itemChield._object = field
+                itemTable.addChild(itemChield)
+
+            self.selectedTables.addTopLevelItem(itemTable)
+        self.expressionEditor = ExpressonEditor(self, self.selectedTables, expression)
+        self.expressionEditor.show()
+        self.expressionEditor.expressionEdited.connect(self.expressionEdited)
+
+    def expressionEdited(self, expression: Expression) -> None:
+        """NoDocumentation"""
+        self.updateConditionsUnion()
 
     def addUnion(self) -> None:
         """NoDocumentation"""
@@ -74,110 +165,115 @@ class UnionsWidget(QWidget):
         w = QWidget()
         # w.setContentsMargins(0, 0, 0, 0)
         w.setLayout(QHBoxLayout())
-        ch = self.getComboBoxTableSelection()
+        ch = self.getComboBoxTableSelection(union, row, 0)
         ch.setCurrentText(union.table1.alias)
+        w.comboBox = ch
         w.layout().setContentsMargins(0, 0, 0, 0)
         w.layout().addWidget(ch)
         self.unions.setCellWidget(row, 0, w)
 
         w = QWidget()
         w.setLayout(QHBoxLayout())
-        ch = self.getComboBoxTypeUnionSelection()
+        ch = self.getComboBoxTypeUnionSelection(union)
+        w.comboBox = ch
         w.layout().addWidget(ch)
         w.layout().setContentsMargins(0, 0, 0, 0)
         self.unions.setCellWidget(row, 1, w)
 
         w = QWidget()
         w.setLayout(QHBoxLayout())
-        ch = self.getComboBoxTableSelection()
+        ch = self.getComboBoxTableSelection(union, row, 2)
         ch.setCurrentText(union.table2.alias)
+        w.comboBox = ch
         w.layout().addWidget(ch)
         w.layout().setContentsMargins(0, 0, 0, 0)
         self.unions.setCellWidget(row, 2, w)
+        if self.currentUnion == None:
+            self.currentUnion = self.query.unions[0]
+            self.updateConditionsUnion()
 
 
-
-
-
-    def getComboBoxTableSelection(self) -> QComboBox:
+    def getComboBoxTableSelection(self, union, row: int, column: int) -> XComboBox:
         """NoDocumentation"""
-        res = QComboBox()
-        res.setLineEdit(QLineEdit())
+        res = XComboBox()
+        res.union = union
+        res.row = row
+        res.column = column
+        res.setLineEdit(XLineEdit())
+        res.lineEdit().union = union
         res.lineEdit().setReadOnly(True)
         res.setStyleSheet("QComboBox { qproperty-frame: false }");
         for tableAlias, selectedTable in self.query.selectedTables.items():
             res.addItem(tableAlias, selectedTable)
+
+        res.activated.connect(self.selectedTableUnion)
+        res.lineEdit().selectedUnion.connect(self.setCurrentUnion)
         return res
 
-    def getComboBoxTypeUnionSelection(self) -> QComboBox:
+    def selectedTableUnion(self) -> None:
         """NoDocumentation"""
-        res = QComboBox()
-        res.setLineEdit(QLineEdit())
+        comboBox: XComboBox = self.sender()
+        union: xQuery.Union = comboBox.union
+        row: int = comboBox.row
+        column: int = comboBox.column
+        assert column in (0, 2)
+
+        if column == 0:
+            newTable1 = comboBox.currentData()
+            if union.table2 == newTable1:
+                comboBoxOtherTable = self.unions.cellWidget(row, 2).comboBox
+                comboBoxOtherTable.setCurrentText(union.table1.alias)
+                union.setTable2(union.table1)
+            union.setTable1(newTable1)
+        elif column == 2:
+            newTable2 = comboBox.currentData()
+            if union.table1 == newTable2:
+                comboBoxOtherTable = self.unions.cellWidget(row, 0).comboBox
+                comboBoxOtherTable.setCurrentText(union.table2.alias)
+                union.setTable1(union.table2)
+            union.setTable2(newTable2)
+
+
+    def getComboBoxTypeUnionSelection(self, union) -> XComboBox:
+        """NoDocumentation"""
+        res = XComboBox()
+        res.union = union
+        res.setLineEdit(XLineEdit())
+        res.lineEdit().union = union
         res.lineEdit().setReadOnly(True)
         res.setStyleSheet("QComboBox { qproperty-frame: false }");
         res.setEditable(True)
-        # res.setStyleSheet('QComboBox::drop-down {width: 20px;}')
-        # res.setEditable(True)
         for typeUnion in ('INNER', 'OUTER', 'LEFT', 'RIGHT'):
             res.addItem(typeUnion)
+        res.activated.connect(self.selectedTypeUnion)
+        res.lineEdit().selectedUnion.connect(self.setCurrentUnion)
         return res
 
-    def alowedAddTableForUnion(self, aliasTable: str, row: int, firstColumn: bool) -> bool:
+    def setCurrentUnion(self, union) -> None:
         """NoDocumentation"""
+        self.currentUnion = union
+        if self.currentUnion != None:
+            self.unions.selectRow(self.query.unions.index(union))
+        self.updateConditionsUnion()
 
-        table = pd.DataFrame(columns=('aliasTable1', 'union', 'aliasTable2'))
-
-        for index in range(self.unions.rowCount()):
-            aliasTable1 = self.unions.cellWidget(index, 0)._object.alias
-            aliasTable2 = self.unions.cellWidget(index, 2)._object.alias
-            union = self.unions.cellWidget(index, 1).comboBox.currentText()
-
-            if index == row:
-                currentAliasTable1 = self.unions.cellWidget(index, 0)._object.alias
-                currentAliasTable2 = self.unions.cellWidget(index, 2)._object.alias
-                currentUnion = self.unions.cellWidget(index, 1).comboBox.currentText()
-            else:
-                table.append({'aliasTable1': aliasTable1, 'union': union, 'aliasTable2': aliasTable2})
-
-        if firstColumn:
-            return not table.query(f'aliasTable1 == \'{currentAliasTable1}\' AND union == \'RIGHT\'').empty
-        else:
-            if currentAliasTable1 == currentAliasTable2:
-                return False
-            else:
-                unionsTable2 = table.query(
-                    f'aliasTable1 == \'{currentAliasTable2}\' OR aliasTable2 == \'{currentAliasTable2}\'')
-                for row in unionsTable2:
-                    if row.aliasTable1 == currentAliasTable2:
-                        anotherAliasTable = row.aliasTable2
-                    else:
-                        anotherAliasTable = row.aliasTable1
-                    return not table.query(
-                        f'(aliasTable1 == \'{currentAliasTable1}\' AND aliasTable2 == \'{anotherAliasTable}\') OR'
-                        f'(aliasTable1 == \'{anotherAliasTable}\' AND aliasTable2 == \'{currentAliasTable1}\')')
-
-            # currentUnionAliasTable1 = self.unions.cellWidget(row, 0)._object.alias
-            #     for index in range(self.unions.rowCount()):
-            #         aliasTable1 = self.unions.cellWidget(index, 0)._object.alias
-            #         aliasTable2 = self.unions.cellWidget(index, 2)._object.alias
-            #         typeUnion = self.unions.cellWidget(index, 1).currentText()
-            #         if index == row:
-            #             if aliasTable1 == aliasTable:
-            #                 return False
-            #             else:
-            #                 counter = Counter()
-            #                 for i in range(self.unions.rowCount()):
-            #                     if i == row:
-            #                         continue
-            #         elif (aliasTable1 == currentUnionAliasTable1 and aliasTable2 == aliasTable) or \
-            #                 (aliasTable2 == currentUnionAliasTable1 and aliasTable1 == aliasTable):
-            #             return False
-            #         elif
-        return True
-
-    def getComboBox(self, selectedTables: Dict[str, SelectedTable], column: int) -> None:
+    def updateConditionsUnion(self) -> None:
         """NoDocumentation"""
-        pass
+        self.conditionsUnions.clear()
+        self.conditionsUnions.setRowCount(0)
+        self.conditionsUnions.setHorizontalHeaderLabels(['Условия'])
+        if self.currentUnion == None:
+            return
+        for expression in self.currentUnion.conditions:
+            item = QTableWidgetItem()
+            item.setText(expression.sqlText)
+            item._object = expression
+            self.conditionsUnions.addString((item,))
+
+    def selectedTypeUnion(self) -> None:
+        """NoDocumentation"""
+        comboBox: XComboBox = self.sender()
+        union: xQuery.Union = comboBox.union
+        union.setTypeUnion(comboBox.currentText())
 
 
 

@@ -8,7 +8,7 @@ class Expression():
         self.query = query
         self.alias = alias
         if _object == None:
-            self.sqltext = ''
+            self.sqlText = ''
             # self.usedFieldsTables = dict()
         else:
             if alias == '':

@@ -191,7 +191,7 @@ class TablesAndFieldsWidget(QWidget):
                 return
             expression = currentItem._object
             self.selectedFields.deleteString(expression)
-            qc.XQuery.deleteSelectedField(self.query, expression)
+            self.query.deleteSelectedField(expression)
         elif self.selectedTables.hasFocus():
             currentItem = self.selectedTables.currentItem()
             if currentItem == None:
@@ -200,7 +200,7 @@ class TablesAndFieldsWidget(QWidget):
             if type(currentItem._object) == SelectedTable:
                 selectedTable = currentItem._object
                 self.selectedTables.deleteBranch(selectedTable)
-                qc.XQuery.deleteSelectedTable(self.query, selectedTable)
+                self.query.deleteSelectedTable(selectedTable)
 
 
     def editExpression(self, expression: Expression) -> None:
