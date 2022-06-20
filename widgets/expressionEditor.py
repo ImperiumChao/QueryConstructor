@@ -9,7 +9,7 @@ from table import SelectedFieldTable
 
 class ExpressonEditor(QDialog):
     expressionEdited = pyqtSignal(object)
-    def __init__(self, parent: QWidget, availablesFields: Union[XTreeWidget, XTableWidget], expression: Expression):
+    def __init__(self, parent: QWidget, availablesFields: Union[XTreeWidget, XTableWidget], expression: Expression, fieldForDraging: str = 'path'):
         super().__init__(parent)
         self.expression = expression
         self.setLayout(QVBoxLayout())
@@ -19,8 +19,8 @@ class ExpressonEditor(QDialog):
         self.splitter = QSplitter()
         self.area1.layout().addWidget(self.splitter)
 
-        self.availableFields = availablesFields.clone()
-        self.availableFields.fieldForDraging = 'path'
+        self.availableFields = availablesFields
+        self.availableFields.fieldForDraging = fieldForDraging
 
         if type(self.availableFields) == XTreeWidget:
             self.availableFields.setHeaderLabel('Поля')

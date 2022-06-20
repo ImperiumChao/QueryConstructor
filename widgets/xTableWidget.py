@@ -1,7 +1,7 @@
 import typing
 
 from PyQt5 import QtCore, QtGui
-from PyQt5.QtWidgets import QTableWidget, QAbstractItemView, QShortcut, QTableWidgetItem
+from PyQt5.QtWidgets import QTableWidget, QAbstractItemView, QShortcut, QTableWidgetItem, QWidget
 from PyQt5.QtGui import QDrag
 from PyQt5.QtCore import QMimeData, pyqtSignal, Qt
 import queryConstrucorForm.queryConstructor as qc
@@ -20,7 +20,7 @@ class XTableWidget(QTableWidget):
         self.setDragDropMode(QAbstractItemView.DragDrop)
         self.fieldForDraging = ''
 
-        self.objects = list()
+        # self.objects = list()
 
 
     def dragEnterEvent(self, event) -> None:
@@ -50,8 +50,12 @@ class XTableWidget(QTableWidget):
         self.setRowCount(lastRow)
 
         for column, item in enumerate(string):
-            self.setItem(lastRow-1, column, item)
-            self.objects.append(item._object)
+
+            if type(item) == QTableWidgetItem:
+                self.setItem(lastRow-1, column, item)
+                # self.objects.append(item._object)
+            else:
+                self.setCellWidget(lastRow-1, column, item)
 
     def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
         currentItem = self.currentItem()

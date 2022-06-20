@@ -2,7 +2,7 @@ import sys
 
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QPushButton, QLineEdit, QShortcut
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QPushButton, QLineEdit
 # from mainWindow import MainWindow
 
 class Window(QWidget):
@@ -20,7 +20,7 @@ class MyWidget(QWidget):
 
     def deleteObject(self) -> None:
         """NoDocumentation"""
-        print('deleteObject')
+        print('deleteObjectdfg')
 
 if __name__ == "__main__":
     app = QApplication([])

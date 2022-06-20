@@ -1,4 +1,5 @@
 from PyQt5.QtSql import QSqlQuery
+from PyQt5.QtCore import pyqtSignal, QObject
 from table import Table, SelectedTable, SelectedFieldTable
 from queryConstrucorForm.queryConstructor import QueryConstructor
 from expression import Expression
@@ -30,9 +31,15 @@ class UnionTables():
         """NoDocumentation"""
         self.conditions.append(expression)
 
+    def deleteCondition(self, expression: Expression) -> None:
+        """NoDocumentation"""
+        pass
 
-class XQuery(QSqlQuery):
+
+class XQuery(QSqlQuery, QObject):
     availableTables: Dict[str, Table] = dict()
+    changedSelectedTables = pyqtSignal()
+    changedSelectedFields = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -74,6 +81,7 @@ class XQuery(QSqlQuery):
 
         selectedTable = SelectedTable(self, table, alias)
         self.selectedTables[table.name] = selectedTable
+        self.changedSelectedTables.emit()
         return selectedTable
 
     def addAndGetSelectedField(self, selectedFieldTable: SelectedFieldTable) -> Expression:
@@ -90,6 +98,7 @@ class XQuery(QSqlQuery):
 
         expression = Expression(self, selectedFieldTable, alias)
         self.fields[alias] = expression
+        self.changedSelectedFields.emit()
         return expression
 
     def deleteSelectedTable(self, selectedTable: SelectedTable) -> None:
@@ -126,6 +135,20 @@ class XQuery(QSqlQuery):
         """NoDocumentation"""
         self.unions.remove(union)
 
+    def addAggregaredFields(self, expression: Expression, aggregationFunction = 'SUM') -> None:
+        """NoDocumentation"""
+        expression.aggregationFunction = aggregationFunction
+        self.usingGrouping = True
+
+    def deleteAggregationField(self, expression: Expression) -> None:
+        """NoDocumentation"""
+        expression.aggregationFunction = ''
+
+    def groupingEnabled(self, value: bool) -> None:
+        """NoDocumentation"""
+        self.usingGrouping = value
+
+
     @classmethod
     def updateAvailableTables(cls):
         query = QSqlQuery()
@@ -150,6 +173,15 @@ class XQuery(QSqlQuery):
         """NoDocumentation"""
         pass
 
+    def addAndGetCondition(self, selectedFieldTable: Union[SelectedFieldTable, None] = None) -> Expression:
+        """NoDocumentation"""
+        expression = Expression(self, selectedFieldTable)
+        self.conditions.append(expression)
+        return expression
+
+    def deleteCondition(self, expression: Expression) -> None:
+        """NoDocumentation"""
+        self.conditions.remove(expression)
 
 
 

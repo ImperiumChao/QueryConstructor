@@ -165,7 +165,7 @@ class TablesAndFieldsWidget(QWidget):
     def addFieldToSelectedFields(self, selectedField: SelectedFieldTable) -> None:
         """NoDocumentation"""
         item = QTableWidgetItem()
-        expression = qc.XQuery.addAndGetSelectedField(self.query, selectedField)
+        expression = self.query.addAndGetSelectedField(selectedField)
         item._object = expression
         item.setText(expression.sqlText)
         # self.expressions[expression] = item
@@ -205,7 +205,7 @@ class TablesAndFieldsWidget(QWidget):
 
     def editExpression(self, expression: Expression) -> None:
         """NoDocumentation"""
-        self.expressonEditor = ExpressonEditor(self, self.selectedTables, expression)
+        self.expressonEditor = ExpressonEditor(self, self.selectedTables.clone(), expression)
         self.expressonEditor.show()
         self.expressonEditor.expressionEdited.connect(self.expressionEdited)
 
