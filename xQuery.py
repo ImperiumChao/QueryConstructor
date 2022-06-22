@@ -40,6 +40,7 @@ class XQuery(QSqlQuery, QObject):
     availableTables: Dict[str, Table] = dict()
     changedSelectedTables = pyqtSignal()
     changedSelectedFields = pyqtSignal()
+    changedGroupingData = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -137,16 +138,21 @@ class XQuery(QSqlQuery, QObject):
 
     def addAggregaredFields(self, expression: Expression, aggregationFunction = 'SUM') -> None:
         """NoDocumentation"""
-        expression.aggregationFunction = aggregationFunction
+        expression.setAggregationFunction(aggregationFunction)
         self.usingGrouping = True
+        self.changedGroupingData.emit()
 
     def deleteAggregationField(self, expression: Expression) -> None:
         """NoDocumentation"""
-        expression.aggregationFunction = ''
+        expression.setAggregationFunction('')
+        self.changedGroupingData.emit()
+
 
     def groupingEnabled(self, value: bool) -> None:
         """NoDocumentation"""
         self.usingGrouping = value
+        self.changedGroupingData.emit()
+
 
 
     @classmethod
@@ -182,6 +188,16 @@ class XQuery(QSqlQuery, QObject):
     def deleteCondition(self, expression: Expression) -> None:
         """NoDocumentation"""
         self.conditions.remove(expression)
+
+    def addAndGetConditionAfterGrouping(self, expression: Union[Expression, None] = None) -> Expression:
+        """NoDocumentation"""
+        expression = Expression(self, expression)
+        self.conditionsAfterGrouping.append(expression)
+        return expression
+
+    def deleteConditionAfterGrouping(self, expression: Expression) -> None:
+        """NoDocumentation"""
+        self.conditionsAfterGrouping.remove(expression)
 
 
 

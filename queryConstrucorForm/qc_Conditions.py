@@ -72,12 +72,13 @@ class ConditionsWidget(QWidget):
         self.expressonEditor.show()
         self.expressonEditor.expressionEdited.connect(self.expressionEdited)
 
-    def expressionEdited(self, expression: Expression) -> None:
+    def expressionEdited(self, expression: Expression, text: str) -> None:
         """NoDocumentation"""
+        expression.setRawSqlText(text)
         for row in range(self.conditions.rowCount()):
             item = self.conditions.item(row, 0)
             if item._object == expression:
-                item.setText(expression.sqlText)
+                item.setText(text)
                 break
 
     def addConditionFromSelectedFields(self, _object: Union[SelectedTable, SelectedFieldTable]) -> None:
@@ -86,7 +87,7 @@ class ConditionsWidget(QWidget):
             item = QTableWidgetItem()
             expression = self.query.addAndGetCondition(_object)
             item._object = expression
-            item.setText(expression.sqlText)
+            item.setText(expression.rawSqlText)
             # self.expressions[expression] = item
             self.conditions.addString([item])
 
@@ -109,7 +110,7 @@ class ConditionsWidget(QWidget):
         expression = self.query.addAndGetCondition()
         item = QTableWidgetItem()
         item._object = expression
-        item.setText(expression.sqlText)
+        item.setText(expression.rawSqlText)
         self.conditions.addString([item])
         self.expressionEditor = ExpressonEditor(self, self.fieldsForСonditions.clone(), expression)
         self.expressionEditor.show()

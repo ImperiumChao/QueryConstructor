@@ -150,8 +150,9 @@ class UnionsWidget(QWidget):
         self.expressionEditor.show()
         self.expressionEditor.expressionEdited.connect(self.expressionEdited)
 
-    def expressionEdited(self, expression: Expression) -> None:
+    def expressionEdited(self, expression: Expression, text: str) -> None:
         """NoDocumentation"""
+        expression.setRawSqlText(text)
         self.updateConditionsUnion()
 
     def addUnion(self) -> None:
@@ -265,7 +266,7 @@ class UnionsWidget(QWidget):
             return
         for expression in self.currentUnion.conditions:
             item = QTableWidgetItem()
-            item.setText(expression.sqlText)
+            item.setText(expression.rawSqlText)
             item._object = expression
             self.conditionsUnions.addString((item,))
 

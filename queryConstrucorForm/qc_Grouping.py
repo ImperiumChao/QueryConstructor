@@ -73,16 +73,16 @@ class GroupingWidget(QWidget):
         self.aggregatedField.setRowCount(0)
         self.aggregatedField.setHorizontalHeaderLabels(('Поле', 'Функция агрегирования'))
         for _, expression in self.query.fields.items():
-            if expression.aggregationFunction == '':
+            if not expression.hasAggregation:
                 item = QTableWidgetItem()
                 item._object = expression
-                item.setText(expression.sqlText)
+                item.setText(expression.rawSqlText)
                 # self.expressions[expression] = item
                 self.selectedFieldsForGrouping.addString([item])
             else:
                 itemField = QTableWidgetItem()
                 itemField._object = expression
-                itemField.setText(expression.sqlText)
+                itemField.setText(expression.rawSqlTextWithoutAgg)
 
                 self.aggregatedField.addString((itemField, self.getComboBoxAggregationFunction(expression)))
 

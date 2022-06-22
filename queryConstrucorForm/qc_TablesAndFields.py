@@ -167,7 +167,7 @@ class TablesAndFieldsWidget(QWidget):
         item = QTableWidgetItem()
         expression = self.query.addAndGetSelectedField(selectedField)
         item._object = expression
-        item.setText(expression.sqlText)
+        item.setText(expression.rawSqlText)
         # self.expressions[expression] = item
         self.selectedFields.addString([item])
 
@@ -179,6 +179,7 @@ class TablesAndFieldsWidget(QWidget):
     def deleteSelectedTable(self, _object: Union[SelectedTable, SelectedFieldTable]) -> None:
         """NoDocumentation"""
         pass
+
     def replaceTable(self) -> None:
         """NoDocumentation"""
         print('replaceTable')
@@ -209,11 +210,12 @@ class TablesAndFieldsWidget(QWidget):
         self.expressonEditor.show()
         self.expressonEditor.expressionEdited.connect(self.expressionEdited)
 
-    def expressionEdited(self, expression: Expression) -> None:
+    def expressionEdited(self, expression: Expression, text: str) -> None:
         """NoDocumentation"""
+        expression.setRawSqlTextWithoutAgg(text)
         for row in range(self.selectedFields.rowCount()):
             item = self.selectedFields.item(row, 0)
             if item._object == expression:
-                item.setText(expression.sqlText)
+                item.setText(text)
                 break
 

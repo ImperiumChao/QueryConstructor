@@ -8,7 +8,7 @@ from expression import Expression
 from table import SelectedFieldTable
 
 class ExpressonEditor(QDialog):
-    expressionEdited = pyqtSignal(object)
+    expressionEdited = pyqtSignal(object, str)
     def __init__(self, parent: QWidget, availablesFields: Union[XTreeWidget, XTableWidget], expression: Expression, fieldForDraging: str = 'path'):
         super().__init__(parent)
         self.expression = expression
@@ -26,9 +26,11 @@ class ExpressonEditor(QDialog):
             self.availableFields.setHeaderLabel('Поля')
         else:
             self.availableFields.setHorizontalHeaderLabels(['Поля'])
+            self.availableFields.verticalHeader().hide()
+            self.availableFields.horizontalHeader().setStretchLastSection(True)
 
         self.splitter.addWidget(self.availableFields)
-        self.textEdit = QTextEdit(expression.sqlText)
+        self.textEdit = QTextEdit(expression.rawSqlText)
         self.splitter.addWidget(self.textEdit)
         self.buttons = QDialogButtonBox()
         self.buttons.setStandardButtons(QDialogButtonBox.Cancel | QDialogButtonBox.Ok)
@@ -39,6 +41,6 @@ class ExpressonEditor(QDialog):
 
     def acceptExpression(self) -> None:
         """NoDocumentation"""
-        self.expression.setText(self.textEdit.toPlainText())
-        self.expressionEdited.emit(self.expression)
+        # self.expression.setRawSqlTextWithoutAgg(self.textEdit.toPlainText())
+        self.expressionEdited.emit(self.expression, self.textEdit.toPlainText())
         self.close()
