@@ -22,6 +22,7 @@ class ConditionsWidget(QWidget):
 
         self.query = query
         self.query.changedSelectedTables.connect(self.updateSelectedFields)
+        self.query.changedConditions.connect(self.updateConditions)
         self.layout = QHBoxLayout()
         self.setLayout(self.layout)
 
@@ -64,7 +65,7 @@ class ConditionsWidget(QWidget):
                 return
             expression = currentItem._object
             self.conditions.removeRow(currentRow)
-            self.query.deleteCondition(expression)
+            self.query.deleteCondition(expression, True)
 
     def editExpression(self, expression: Expression) -> None:
         """NoDocumentation"""
@@ -85,7 +86,7 @@ class ConditionsWidget(QWidget):
         """NoDocumentation"""
         if type(_object) is SelectedFieldTable:
             item = QTableWidgetItem()
-            expression = self.query.addAndGetCondition(_object)
+            expression = self.query.addCondition(_object, True)
             item._object = expression
             item.setText(expression.rawSqlText)
             # self.expressions[expression] = item
@@ -94,24 +95,37 @@ class ConditionsWidget(QWidget):
     def updateSelectedFields(self) -> None:
         """NoDocumentation"""
         self.fieldsForСonditions.clear()
-        for name, table in self.query.selectedTables.items():
+        for selectedTable in self.query.selectedTables:
             itemTable = QTreeWidgetItem()
-            itemTable.setText(0, name)
-            itemTable._object = table
-            for field in table.fields.values():
+            itemTable.setText(0, selectedTable.alias)
+            itemTable._object = selectedTable
+            for field in selectedTable.fields:
                 itemChield = QTreeWidgetItem()
                 itemChield.setText(0, field.name)
                 itemChield._object = field
                 itemTable.addChild(itemChield)
             self.fieldsForСonditions.addTopLevelItem(itemTable)
 
+    def updateConditions(self) -> None:
+        """NoDocumentation"""
+        self.conditions.clear()
+        self.conditions.setColumnCount(1)
+        self.conditions.setRowCount(0)
+        self.conditions.setHorizontalHeaderLabels(('Условия',))
+        for expression in self.query.conditions:
+            item = QTableWidgetItem()
+            item._object = expression
+            item.setText(expression.rawSqlText)
+            self.conditions.addString([item])
+
     def addCondition(self) -> None:
         """NoDocumentation"""
-        expression = self.query.addAndGetCondition()
+        expression = self.query.addCondition(noSignal=True)
         item = QTableWidgetItem()
         item._object = expression
         item.setText(expression.rawSqlText)
         self.conditions.addString([item])
+
         self.expressionEditor = ExpressonEditor(self, self.fieldsForСonditions.clone(), expression)
         self.expressionEditor.show()
         self.expressionEditor.expressionEdited.connect(self.expressionEdited)

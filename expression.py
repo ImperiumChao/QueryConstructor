@@ -20,7 +20,7 @@ class Expression():
 
             if _object == None:
                 self.rawSqlText = ''
-            elif type(_object) == xQuery.UnionTables:   # условие связи
+            elif type(_object) == xQuery.JoinTables:   # условие связи
                 self.rawSqlText = ''    # пока что так
             elif type(_object) == SelectedFieldTable:   # условие до группировки
                 self.rawSqlText = f'{_object.path} = :{_object.name}'
@@ -76,20 +76,37 @@ class Expression():
                 self.aggregationFunction = ''
                 self.hasAggregation = False
 
+        self.query.needUpdateTextQuery.emit()
 
     def setRawSqlTextWithoutAgg(self, text) -> None:
         """NoDocumentation"""
         if self.intricateAggregation:
             self.setRawSqlText(text)
-            return
+        else:
+            self.setRawSqlTextWithoutAgg(text)
 
         self.rawSqlTextWithoutAgg = text
+        self.query.needUpdateTextQuery.emit()
+
+
+    def setRawSqlTextWithoutAgg(self, text) -> None:
+        """NoDocumentation"""
+        if self.hasAggregation:
+            self.rawSqlText = f'{self.aggregationFunction}({text})'
+        else:
+            self.rawSqlText = text
+
+        self.rawSqlTextWithoutAgg = text
+        self.rawSqlTextToParameterizedSqlText()
+        self.query.needUpdateTextQuery.emit()
+
 
     def rawSqlTextToParameterizedSqlText (self) -> None:
         """NoDocumentation"""
+        self.usedFieldsTables.clear()
         numParameters = 1
-        for _, table in self.query.selectedTables.items():
-            for _, fieldTable in table.fields.items():
+        for selectedTable in self.query.selectedTables:
+            for fieldTable in selectedTable.fields:
                 path: str = fieldTable.path
                 if path in self.rawSqlText:
                     self.parameterizedSqlText = self.rawSqlText.replace(path, '{' + str(numParameters) + '}')
@@ -105,6 +122,7 @@ class Expression():
 
         self.setRawSqlText(res)
 
+
     def setAggregationFunction(self, aggregationFunction: str) -> None:
         """NoDocumentation"""
         self.aggregationFunction = aggregationFunction
@@ -116,3 +134,4 @@ class Expression():
             self.hasAggregation = True
 
         self.rawSqlTextToParameterizedSqlText()
+        self.query.needUpdateTextQuery.emit()

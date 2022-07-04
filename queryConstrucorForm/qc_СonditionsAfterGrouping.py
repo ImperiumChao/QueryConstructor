@@ -73,7 +73,7 @@ class ConditionsAfterGroupingWidget(QWidget):
         fields.setColumnCount(1)
         fields.setRowCount(0)
         fields.setHorizontalHeaderLabels(('Доступные поля',))
-        for _, expression_ in self.query.fields.items():
+        for expression_ in self.query.fields:
             if not expression_.hasAggregation:
                 continue
 
@@ -97,7 +97,7 @@ class ConditionsAfterGroupingWidget(QWidget):
         """NoDocumentation"""
 
         item = QTableWidgetItem()
-        expression = self.query.addAndGetConditionAfterGrouping(_object)
+        expression = self.query.addConditionAfterGrouping(_object)
         item._object = expression
         item.setText(expression.rawSqlText)
         # self.expressions[expression] = item
@@ -110,7 +110,7 @@ class ConditionsAfterGroupingWidget(QWidget):
         self.fieldsForСonditionsAfterGrouping.setRowCount(0)
         self.fieldsForСonditionsAfterGrouping.setHorizontalHeaderLabels(('Доступные поля',))
 
-        for _, expression in self.query.fields.items():
+        for expression in self.query.fields:
             if not expression.hasAggregation:
                 continue
 
@@ -134,6 +134,6 @@ class ConditionsAfterGroupingWidget(QWidget):
 
     def addCondition(self) -> None:
         """NoDocumentation"""
-        expression = self.query.addAndGetConditionAfterGrouping()
+        expression = self.query.addConditionAfterGrouping()
         self.updateData()
         self.editExpression(expression)

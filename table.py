@@ -1,5 +1,6 @@
 import re
 import string
+import xQuery
 
 
 class Table():
@@ -52,15 +53,16 @@ class SelectedTable():
         self.query = query
         self.table = table
         self.alias = alias
-        self.fields = dict()
+        self.fields = list()
         for field in table.fields:
-            self.fields[field] = SelectedFieldTable(self, field)
+            self.fields.append(SelectedFieldTable(self, field))
+
     def __str__(self):
         return self.alias
 
     def getSelectedField(self, field: FieldTable) -> "SelectedFieldTable":
         """NoDocumentation"""
-        return self.fields[field]
+        return xQuery.XQuery.find(self.fields, 'fildTable', field)
 
 
 

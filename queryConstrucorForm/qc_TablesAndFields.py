@@ -16,6 +16,8 @@ class TablesAndFieldsWidget(QWidget):
     def __init__(self, query):
         super().__init__()
         self.query = query
+        self.query.changedFieldsQuery.connect(self.updateFieldsQuery)
+        self.query.changedSelectedTables.connect(self.updateSelectedTables)
 
         self.deleteshortcut = QShortcut(self)
         self.deleteshortcut.setKey(Qt.Key_Delete)
@@ -86,8 +88,6 @@ class TablesAndFieldsWidget(QWidget):
         self.selectedFieldsPanelWidget.layout().addStretch()
         self.selectedFieldsPanelWidget.layout().setContentsMargins(0, 0, 0, 0)
 
-
-
         self.selectedFields = XTableWidget()
         self.selectedFields.verticalHeader().hide()
         self.selectedFields.setColumnCount(1)
@@ -117,60 +117,61 @@ class TablesAndFieldsWidget(QWidget):
             return
 
         if type(_object) is Table:
-            table = _object
-            selectedTable = self.query.addAndGetSelectedTable(table)
+            self.query.addSelectedTable(_object)
         elif type(_object) is FieldTable:
-            table = _object.table
-            selectedTable = self.query.addAndGetSelectedTable(table)
-
-            self.addFieldToSelectedFields(selectedTable.getSelectedField(_object))
+            self.query.addSelectedTable(_object.table)
+            selectedTable = self.query.selectedTables[-1]
+            self.query.addFieldQuery(selectedTable.getSelectedField(_object))
         else:
             return
-        self.addTableToSelectedTables(selectedTable)
 
     def addToSelectedFields(self, _object: Union[Table, FieldTable, SelectedTable, SelectedFieldTable]) -> None:
         """NoDocumentation"""
 
         if type(_object) is Table:
-            selectedTable = self.query.addAndGetSelectedTable(_object)
-            self.addTableToSelectedTables(selectedTable)
-            for _, selectedField in selectedTable.fields.items():
-                self.addFieldToSelectedFields(selectedField)
+            self.query.addSelectedTable(_object)
+            selectedTable = self.query.selectedTables[-1]
+            for selectedFieldTable in selectedTable.fields:
+                self.query.addFieldQuery(selectedFieldTable)
         elif type(_object) is FieldTable:
-            selectedTable = self.query.addAndGetSelectedTable(_object.table)
-            self.addTableToSelectedTables(selectedTable)
-            self.addFieldToSelectedFields(selectedTable.getSelectedField(_object))
+            self.query.addSelectedTable(_object.table)
+            selectedTable: SelectedTable = self.query.selectedTables[-1]
+            self.query.addFieldQuery(selectedTable.getSelectedField(_object))
         elif type(_object) is SelectedTable:
-            for _, selectedField in _object.fields.items():
-                self.addFieldToSelectedFields(selectedField)
+            for selectedFieldTable in _object.fields:
+                self.query.addFieldQuery(selectedFieldTable)
         elif type(_object) is SelectedFieldTable:
-            self.addFieldToSelectedFields(_object)
+            self.query.addFieldQuery(_object)
 
 
-
-    def addTableToSelectedTables(self, selectedTable: SelectedTable) -> None:
+    def updateFieldsQuery(self) -> None:
         """NoDocumentation"""
-        itemTable = QTreeWidgetItem()
-        itemTable.setText(0, selectedTable.alias)
-        itemTable._object = selectedTable
+        self.selectedFields.clear()
+        self.selectedFields.setRowCount(0)
+        self.selectedFields.setHorizontalHeaderLabels(('Поля',))
+        for expression in self.query.fields:
+            item = QTableWidgetItem()
+            item._object = expression
+            item.setText(expression.rawSqlTextWithoutAgg)
+            # self.expressions[expression] = item
+            self.selectedFields.addString([item])
 
-        for _, selectedField in selectedTable.fields.items():
-            itemChield = QTreeWidgetItem()
-            itemChield.setText(0, selectedField.path)
-            itemChield._object = selectedField
-            itemTable.addChild(itemChield)
-
-        self.selectedTables.addTopLevelItem(itemTable)
-
-    def addFieldToSelectedFields(self, selectedField: SelectedFieldTable) -> None:
+    def updateSelectedTables(self) -> None:
         """NoDocumentation"""
-        item = QTableWidgetItem()
-        expression = self.query.addAndGetSelectedField(selectedField)
-        item._object = expression
-        item.setText(expression.rawSqlText)
-        # self.expressions[expression] = item
-        self.selectedFields.addString([item])
+        self.selectedTables.clear()
+        self.selectedTables.setHeaderLabel('Выбранные таблицы')
+        for selectedTable in self.query.selectedTables:
+            itemTable = QTreeWidgetItem()
+            itemTable.setText(0, selectedTable.alias)
+            itemTable._object = selectedTable
 
+            for selectedField in selectedTable.fields:
+                itemChield = QTreeWidgetItem()
+                itemChield.setText(0, selectedField.path)
+                itemChield._object = selectedField
+                itemTable.addChild(itemChield)
+
+            self.selectedTables.addTopLevelItem(itemTable)
 
     def deleteSelectedField(self, expression: Expression) -> None:
         """NoDocumentation"""
@@ -192,7 +193,7 @@ class TablesAndFieldsWidget(QWidget):
                 return
             expression = currentItem._object
             self.selectedFields.deleteString(expression)
-            self.query.deleteSelectedField(expression)
+            self.query.deleteFieldQuery(expression)
         elif self.selectedTables.hasFocus():
             currentItem = self.selectedTables.currentItem()
             if currentItem == None:
@@ -218,4 +219,6 @@ class TablesAndFieldsWidget(QWidget):
             if item._object == expression:
                 item.setText(text)
                 break
+
+        self.query.changedFieldsQuery.emit()
 

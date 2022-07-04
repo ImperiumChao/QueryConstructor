@@ -49,6 +49,7 @@ class XTreeWidget(QTreeWidget):
     def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
         currentItem = self.currentItem()
         if currentItem == None:
+            super().mousePressEvent(event)
             return
         button = event.button()
         if button == Qt.RightButton:

@@ -6,59 +6,145 @@ from expression import Expression
 from collections import OrderedDict
 from typing import Dict, List, Union, Tuple
 import pandas as pd
+from types import SimpleNamespace
 
-class UnionTables():
-    def __init__(self, query, table1: SelectedTable, union: str, table2: SelectedTable):
+
+class JoinTables():
+    def __init__(self, query, table1: SelectedTable, join: str, table2: SelectedTable):
         self.query = query
         self.table1 = table1
-        self.union = union
+        self.join = join
         self.table2 = table2
         self.conditions: List[Expression] = list()
 
-    def setTypeUnion(self, typeUnion: str) -> None:
+    def setTypeJoin(self, typeJoin: str) -> None:
         """NoDocumentation"""
-        self.union = typeUnion
+        self.join = typeJoin
+        self.query.needUpdateTextQuery.emit()
+
 
     def setTable1(self, table: SelectedTable) -> None:
         """NoDocumentation"""
         self.table1 = table
+        self.query.needUpdateTextQuery.emit()
+
 
     def setTable2(self, table: SelectedTable) -> None:
         """NoDocumentation"""
         self.table2 = table
+        self.query.needUpdateTextQuery.emit()
 
     def addCondition(self, expression: Expression) -> None:
         """NoDocumentation"""
         self.conditions.append(expression)
+        self.query.needUpdateTextQuery.emit()
 
     def deleteCondition(self, expression: Expression) -> None:
         """NoDocumentation"""
-        pass
+        self.conditions.remove(expression)
+        self.query.needUpdateTextQuery.emit()
 
 
 class XQuery(QSqlQuery, QObject):
     availableTables: Dict[str, Table] = dict()
+
     changedSelectedTables = pyqtSignal()
-    changedSelectedFields = pyqtSignal()
+    changedFieldsQuery = pyqtSignal()
     changedGroupingData = pyqtSignal()
+    changedJoins = pyqtSignal()
+    changedConditions = pyqtSignal()
+    changedConditionsAfterGrouping = pyqtSignal()
+    changedFieldsOrderBy = pyqtSignal()
+    needUpdateTextQuery = pyqtSignal()
 
     def __init__(self):
         super().__init__()
-        self.selectedTables: Dict[str, SelectedTable] = OrderedDict()
-        self.fields: Dict[str, Expression] = OrderedDict()
-        self.unions: List[UnionTables] = list()
-        self.joins: List['XQuery'] = list()
+        self.selectedTables: Lict[SelectedTable] = list()
+        self.fields: List[Expression] = list()
+        self.joins: List[JoinTables] = list()
+        self.unions: List[SimpleNamespace] = list()
         self.conditions: List[Expression] = list()
         self.conditionsAfterGrouping: List[Expression] = list()
-        self.sorting: List[Union[SelectedFieldTable, Expression]]
+        self.orderBy: List[SimpleNamespace] = list()
         # self.foundParameters: Dict[str, str] = dict()
         self.usingGrouping = False
         self.intricateAggregation = False
 
+        self.needUpdateTextQuery.connect(self.updateTextQuery)
         if len(self.availableTables) == 0:
             XQuery.updateAvailableTables()
 
         print(self.availableTables)
+
+    def updateTextQuery(self) -> None:
+        """NoDocumentation"""
+        res = 'SELECT \n    '
+        fields = [f'{expression.rawSqlText} AS {expression.alias}' for expression in self.fields]
+        res += ',\n    '.join(fields)
+
+        if len(self.selectedTables) != 0:
+            res += '\nFROM'
+
+        tablesWithJoins = set()
+        tablesWithoutJoins = set()
+        for selectedtable in self.selectedTables:
+            if self.find(self.joins, 'table1', selectedtable) != None or\
+                    self.find(self.joins, 'table2', selectedtable) != None:
+                tablesWithJoins.add(selectedtable)
+            else:
+                tablesWithoutJoins.add(selectedtable)
+
+
+        if len(self.joins) != 0:
+            joins = self.joins.copy()
+            while True:
+                firstTable = None
+                for selectedtable in tablesWithJoins:
+                    if firstTable != None:
+                        break
+                    for join in joins:
+                        if selectedtable in (join.table1, join.table2):
+                            if join.join == 'LEFT' and selectedtable == join.table2:
+                                continue
+                            elif join.join == 'RIGHT' and selectedtable == join.table1:
+                                continue
+                            else:
+                                firstTable = selectedtable
+                                break
+
+                res += f'{firstTable.table.name} AS {firstTable.alias}'
+                res += self.getTextJoinsForTable(firstTable, joins)
+
+
+                if len(joins) == 0:
+                    break
+
+        self.queryConsructor.textQuery.setText(res)
+
+
+    def getTextJoinsForTable(self, table: SelectedTable, joins: List[JoinTables]) -> str:
+        """NoDocumentation"""
+        res = ''
+        for join in joins:
+            if not table in (join.table1, join.table2):
+                continue
+
+            if table == join.table1:
+                joinedTable = join.table2
+            else:
+                joinedTable = join.table1
+
+            res += f'\n{join.join} JOIN {joinedTable.table.name} AS {joinedTable.alias}\n'
+            joinscopy = joins.copy()
+            joinscopy.remove(join)
+            # res += self.getTextJoinsForTable(joinedTable, joinscopy)
+            res += 'ON '
+            conditions = list()
+            for expression in join.conditions:
+                conditions.append(expression.rawSqlText)
+            res += ' AND '.join(conditions)
+        return res
+
 
     def openQueryConstructor(self) -> None:
         """NoDocumentation"""
@@ -68,91 +154,197 @@ class XQuery(QSqlQuery, QObject):
             self.queryConsructor = QueryConstructor(self)
             self.queryConsructor.show()
 
-    def addAndGetSelectedTable(self, table: Table) -> SelectedTable:
+    def addSelectedTable(self, table: Table, noSignal=False) -> SelectedTable:
         """NoDocumentation"""
         alias = table.name
-        if alias in self.selectedTables:
-            i = 1
-            while True:
-                alias = table.name + str(i)
-                if alias in self.selectedTables:
-                    i += 1
-                else:
-                    break
+        i = 0
+        while True:
+            searchValue = XQuery.find(self.selectedTables, 'alias', alias)
+            if searchValue == None:
+                break
+            i += 1
+            alias = table.name + str(i)
 
         selectedTable = SelectedTable(self, table, alias)
-        self.selectedTables[table.name] = selectedTable
-        self.changedSelectedTables.emit()
+        self.selectedTables.append(selectedTable)
+        self.needUpdateTextQuery.emit()
+        if not noSignal:
+            self.changedSelectedTables.emit()
         return selectedTable
 
-    def addAndGetSelectedField(self, selectedFieldTable: SelectedFieldTable) -> Expression:
+    def addFieldQuery(self, selectedFieldTable: SelectedFieldTable, noSignal=False) -> Expression:
         """NoDocumentation"""
         alias = selectedFieldTable.name
-        if alias in self.fields:
-            i = 1
-            while True:
-                alias = selectedFieldTable.name + str(i)
-                if alias in self.fields:
-                    i += 1
-                else:
-                    break
+        i = 0
+        while True:
+            searchValue = XQuery.find(self.fields, 'alias', alias)
+            if searchValue == None:
+                break
+            i += 1
+            alias = selectedFieldTable.name + str(i)
 
         expression = Expression(self, selectedFieldTable, alias)
-        self.fields[alias] = expression
-        self.changedSelectedFields.emit()
+        self.fields.append(expression)
+        self.needUpdateTextQuery.emit()
+
+        if not noSignal:
+            self.changedFieldsQuery.emit()
         return expression
 
-    def deleteSelectedTable(self, selectedTable: SelectedTable) -> None:
+    def deleteSelectedTable(self, selectedTable: SelectedTable, noSignal=False) -> None:
         """NoDocumentation"""
-        del self.selectedTables[selectedTable.alias]
+        self.selectedTables.remove(selectedTable)
+        self.needUpdateTextQuery.emit()
+        if not noSignal:
+            self.changedSelectedTables.emit()
 
-    def deleteSelectedField(self, expression: Expression) -> None:
+    def deleteFieldQuery(self, expression: Expression, noSignal=False) -> None:
         """NoDocumentation"""
-        del self.fields[expression.alias]
+        self.fields.remove(expression)
+        self.needUpdateTextQuery.emit()
+        if not noSignal:
+            self.changedFieldsQuery.emit()
 
-    def addAndGetUnionAuto(self) -> Union[UnionTables, None]:
+    def addJoinAuto(self, noSignal=False) -> Union[JoinTables, None]:
         """NoDocumentation"""
         if len(self.selectedTables) < 2:
             return None
         alreadyUnitedTables = set()
-        table1 = list(self.selectedTables.values())[0]
+        table1 = self.selectedTables[0]
         alreadyUnitedTables.add(table1)
 
-        for union in self.unions:
-            alreadyUnitedTables.add(union.table1)
-            alreadyUnitedTables.add(union.table2)
+        for join in self.joins:
+            alreadyUnitedTables.add(join.table1)
+            alreadyUnitedTables.add(join.table2)
 
         if len(alreadyUnitedTables) == len(self.selectedTables):
             return None
 
-        for _, selectedTable in self.selectedTables.items():
+        for selectedTable in self.selectedTables:
             if not selectedTable in alreadyUnitedTables:
                 table2 = selectedTable
-                unionTables = UnionTables(self, table1, 'INNER', table2)
-                self.unions.append(unionTables)
-                return unionTables
+                joinTables = JoinTables(self, table1, 'INNER', table2)
+                self.joins.append(joinTables)
+                return joinTables
+        self.needUpdateTextQuery.emit()
+        if not noSignal:
+            self.changedJoins.emit()
 
-    def deleteUnion(self, union) -> None:
+    def deleteJoin(self, joins, noSignal=False) -> None:
         """NoDocumentation"""
-        self.unions.remove(union)
+        self.joins.remove(joins)
+        self.needUpdateTextQuery.emit()
+        if not noSignal:
+            self.changedJoins.emit()
 
-    def addAggregaredFields(self, expression: Expression, aggregationFunction = 'SUM') -> None:
+    def addAggregaredFields(self, expression: Expression, noSignal=False) -> None:
         """NoDocumentation"""
-        expression.setAggregationFunction(aggregationFunction)
+        expression.setAggregationFunction('SUM')
         self.usingGrouping = True
-        self.changedGroupingData.emit()
+        self.needUpdateTextQuery.emit()
+        if not noSignal:
+            self.changedGroupingData.emit()
 
-    def deleteAggregationField(self, expression: Expression) -> None:
+
+    def deleteAggregationField(self, expression: Expression, noSignal=False) -> None:
         """NoDocumentation"""
         expression.setAggregationFunction('')
-        self.changedGroupingData.emit()
+        self.needUpdateTextQuery.emit()
+        if not noSignal:
+            self.changedGroupingData.emit()
 
-
-    def groupingEnabled(self, value: bool) -> None:
+    def setGroupingEnabled(self, value: bool, noSignal=False) -> None:
         """NoDocumentation"""
         self.usingGrouping = value
-        self.changedGroupingData.emit()
+        self.needUpdateTextQuery.emit()
+        if not noSignal:
+            self.changedGroupingData.emit()
 
+
+    def addUnionQuery(self) -> 'XQuery':
+        """NoDocumentation"""
+        query = XQuery()
+        union = SimpleNamespace()
+        union.query = query
+        union.union = 'UNION'
+        self.unions.append(union)
+        return query
+
+    def deleteUnionQuery(self, query) -> None:
+        """NoDocumentation"""
+        self.unions.remove(self.find(self.unions, 'query', query))
+
+    def moveField(self, index: int, up: bool, noSignal=False) -> None:
+        """NoDocumentation"""
+        if up:
+            self.fields[index], self.fields[index - 1] = self.fields[index - 1], self.fields[index]
+        else:
+            self.fields[index], self.fields[index + 1] = self.fields[index + 1], self.fields[index]
+        self.needUpdateTextQuery.emit()
+        if not noSignal:
+            self.changedFieldsQuery.emit()
+
+    def checkJoinsQuery(self) -> bool:
+        """NoDocumentation"""
+        pass
+
+    def addCondition(self, selectedFieldTable: Union[SelectedFieldTable, None] = None, noSignal=False) -> Expression:
+        """NoDocumentation"""
+        expression = Expression(self, selectedFieldTable)
+        self.conditions.append(expression)
+        self.needUpdateTextQuery.emit()
+        if not noSignal:
+            self.changedConditions.emit()
+        return expression
+
+    def deleteCondition(self, expression: Expression, noSignal=False) -> None:
+        """NoDocumentation"""
+        self.conditions.remove(expression)
+        self.needUpdateTextQuery.emit()
+        if not noSignal:
+            self.changedConditions.emit()
+
+    def addConditionAfterGrouping(self, expression: Union[Expression, None] = None, noSignal=False) -> Expression:
+        """NoDocumentation"""
+        expression = Expression(self, expression)
+        self.conditionsAfterGrouping.append(expression)
+        self.needUpdateTextQuery.emit()
+        if not noSignal:
+            self.changedConditionsAfterGrouping.emit()
+        return expression
+
+    def deleteConditionAfterGrouping(self, expression: Expression, noSignal=False) -> None:
+        """NoDocumentation"""
+        self.conditionsAfterGrouping.remove(expression)
+        self.needUpdateTextQuery.emit()
+        if not noSignal:
+            self.changedConditionsAfterGrouping.emit()
+
+    def addFieldOrderBy(self, _object: Union[Expression, SelectedFieldTable], noSignal=False) -> SimpleNamespace:
+        """NoDocumentation"""
+
+        orderBy = SimpleNamespace()
+        orderBy.field = _object
+        orderBy.typeOfSorting = 'ASC'
+        self.orderBy.append(orderBy)
+        self.needUpdateTextQuery.emit()
+        if not noSignal:
+            self.changedFieldsOrderBy.emit()
+        return orderBy
+
+    def deleteFieldOrderBy(self, _object, noSignal=False) -> None:
+        """NoDocumentation"""
+        self.orderBy.remove(_object)
+        self.needUpdateTextQuery.emit()
+        if not noSignal:
+            self.changedFieldsOrderBy.emit()
+
+    def setTypeOfSorting(self, _object, typeOfSorting: str, noSignal=False) -> None:
+        """NoDocumentation"""
+        _object.typeOfSorting = typeOfSorting
+        self.needUpdateTextQuery.emit()
+        if not noSignal:
+            self.changedFieldsOrderBy.emit()
 
 
     @classmethod
@@ -166,38 +358,19 @@ class XQuery(QSqlQuery, QObject):
             sql = query.value('sql')
             cls.availableTables[name] = Table(name, sql)
 
-    def getPandasDataFrameUnions(self) -> pd.DataFrame:
+    def getPandasDataFrameJoins(self) -> pd.DataFrame:
         """NoDocumentation"""
-        res = pd.DataFrame(columns=('aliasTable1', 'union', 'aliasTable2'))
+        res = pd.DataFrame(columns=('aliasTable1', 'join', 'aliasTable2'))
 
-        for union in self.unions:
-            res.append({'aliasTable1': union.table1.alias, 'union': union.union, 'aliasTable2': union.table2.alias})
+        for join in self.joins:
+            res.append({'aliasTable1': join.table1.alias, 'join': join.join, 'aliasTable2': join.table2.alias})
 
         return res
 
-    def checkUnionsQuery(self) -> bool:
+    @staticmethod
+    def find(objects: object, attribute: str, value: object) -> object:
         """NoDocumentation"""
-        pass
-
-    def addAndGetCondition(self, selectedFieldTable: Union[SelectedFieldTable, None] = None) -> Expression:
-        """NoDocumentation"""
-        expression = Expression(self, selectedFieldTable)
-        self.conditions.append(expression)
-        return expression
-
-    def deleteCondition(self, expression: Expression) -> None:
-        """NoDocumentation"""
-        self.conditions.remove(expression)
-
-    def addAndGetConditionAfterGrouping(self, expression: Union[Expression, None] = None) -> Expression:
-        """NoDocumentation"""
-        expression = Expression(self, expression)
-        self.conditionsAfterGrouping.append(expression)
-        return expression
-
-    def deleteConditionAfterGrouping(self, expression: Expression) -> None:
-        """NoDocumentation"""
-        self.conditionsAfterGrouping.remove(expression)
-
-
-
+        for ob in objects:
+            if getattr(ob, attribute) == value:
+                return ob
+        return None

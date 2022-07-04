@@ -60,6 +60,7 @@ class XTableWidget(QTableWidget):
     def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
         currentItem = self.currentItem()
         if currentItem == None:
+            super().mousePressEvent(event)
             return
         button = event.button()
         if button == Qt.RightButton:
@@ -90,9 +91,11 @@ class XTableWidget(QTableWidget):
 
     def deleteString(self, _object) -> None:
         """NoDocumentation"""
-        index = self.objects.index(_object)
-        self.objects.pop(index)
-        self.removeRow(index)
+        for row in range(self.rowCount()):
+            if self.item(row, 0)._object == _object:
+                self.removeRow(row)
+                return
+
 
     def clone(self) -> "XTableWidget":
         """NoDocumentation"""

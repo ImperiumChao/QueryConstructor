@@ -9,7 +9,8 @@ class GroupingWidget(QWidget):
     def __init__(self, query):
         super().__init__()
         self.query = query
-        self.query.changedSelectedFields.connect(self.updateGroupingData)
+        self.query.changedFieldsQuery.connect(self.updateGroupingData)
+        self.query.changedGroupingData.connect(self.updateGroupingData)
 
         self.deleteshortcut = QShortcut(self)
         self.deleteshortcut.setKey(Qt.Key_Delete)
@@ -24,7 +25,7 @@ class GroupingWidget(QWidget):
         w.layout().setContentsMargins(0, 0, 0, 0)
         self.layout().addWidget(w)
         self.checkBoxGrouping = QCheckBox()
-        self.checkBoxGrouping.stateChanged.connect(lambda state: self.query.groupingEnabled(bool(state)))
+        self.checkBoxGrouping.stateChanged.connect(lambda state: self.query.setGroupingEnabled(bool(state)))
         w.layout().addWidget(self.checkBoxGrouping)
         w.layout().addWidget(QLabel('Группировка'))
 
@@ -51,13 +52,10 @@ class GroupingWidget(QWidget):
         """NoDocumentation"""
         if self.aggregatedField.hasFocus():
             currentItem = self.aggregatedField.currentItem()
-            currentRow = self.aggregatedField.currentRow()
             if currentItem == None:
                 return
             expression = currentItem._object
-            self.aggregatedField.removeRow(currentRow)
             self.query.deleteAggregationField(expression)
-            self.updateGroupingData()
 
     def updateGroupingData(self) -> None:
         """NoDocumentation"""
@@ -72,7 +70,7 @@ class GroupingWidget(QWidget):
         self.aggregatedField.setColumnCount(2)
         self.aggregatedField.setRowCount(0)
         self.aggregatedField.setHorizontalHeaderLabels(('Поле', 'Функция агрегирования'))
-        for _, expression in self.query.fields.items():
+        for expression in self.query.fields:
             if not expression.hasAggregation:
                 item = QTableWidgetItem()
                 item._object = expression
@@ -85,7 +83,6 @@ class GroupingWidget(QWidget):
                 itemField.setText(expression.rawSqlTextWithoutAgg)
 
                 self.aggregatedField.addString((itemField, self.getComboBoxAggregationFunction(expression)))
-
 
 
     def getComboBoxAggregationFunction(self, expression) -> QComboBox:
@@ -104,9 +101,9 @@ class GroupingWidget(QWidget):
 
     def selectedAggregationFunction(self) -> None:
         """NoDocumentation"""
-        pass
+        comboBox: QComboBox = self.sender()
+        comboBox.expression.setAggregationFunction(comboBox.currentText())
 
     def addedAggregatedFields(self, expression) -> None:
         """NoDocumentation"""
         self.query.addAggregaredFields(expression)
-        self.updateGroupingData()
