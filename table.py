@@ -62,7 +62,7 @@ class SelectedTable():
 
     def getSelectedField(self, field: FieldTable) -> "SelectedFieldTable":
         """NoDocumentation"""
-        return xQuery.XQuery.find(self.fields, 'fildTable', field)
+        return xQuery.XQuery.find(self.fields, 'fieldTable', field)
 
 
 

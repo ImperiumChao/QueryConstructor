@@ -78,12 +78,17 @@ class XQuery(QSqlQuery, QObject):
 
     def updateTextQuery(self) -> None:
         """NoDocumentation"""
-        res = 'SELECT \n    '
+        indent = ' ' * 4
+        res = 'SELECT \n'
         fields = [f'{expression.rawSqlText} AS {expression.alias}' for expression in self.fields]
-        res += ',\n    '.join(fields)
+        res += indent + f',\n{indent}'.join(fields)
 
-        if len(self.selectedTables) != 0:
-            res += '\nFROM'
+        if len(self.selectedTables) == 0:
+            self.queryConsructor.textQuery.setText(res)
+            return
+
+
+        res += '\nFROM \n'
 
         tablesWithJoins = set()
         tablesWithoutJoins = set()
@@ -95,30 +100,45 @@ class XQuery(QSqlQuery, QObject):
                 tablesWithoutJoins.add(selectedtable)
 
 
-        if len(self.joins) != 0:
-            joins = self.joins.copy()
-            while True:
-                firstTable = None
-                for selectedtable in tablesWithJoins:
-                    if firstTable != None:
-                        break
-                    for join in joins:
-                        if selectedtable in (join.table1, join.table2):
-                            if join.join == 'LEFT' and selectedtable == join.table2:
-                                continue
-                            elif join.join == 'RIGHT' and selectedtable == join.table1:
-                                continue
-                            else:
-                                firstTable = selectedtable
-                                break
+        # if len(self.joins) != 0:
+        #     joins = self.joins.copy()
+        #     while True:
+        #         firstTable = None
+        #         for selectedtable in tablesWithJoins:
+        #             if firstTable != None:
+        #                 break
+        #             for join in joins:
+        #                 if selectedtable in (join.table1, join.table2):
+        #                     if join.join == 'LEFT' and selectedtable == join.table2:
+        #                         continue
+        #                     elif join.join == 'RIGHT' and selectedtable == join.table1:
+        #                         continue
+        #                     else:
+        #                         firstTable = selectedtable
+        #                         break
+        #
+        #         res += f'{firstTable.table.name} AS {firstTable.alias}'
+        #         res += self.getTextJoinsForTable(firstTable, joins)
+        #
+        #
+        #         if len(joins) == 0:
+        #             break
 
-                res += f'{firstTable.table.name} AS {firstTable.alias}'
-                res += self.getTextJoinsForTable(firstTable, joins)
+        res += indent + f', \n{indent}'.join([f'{selectedTable.table.name} AS {selectedTable.alias}' for selectedTable in tablesWithoutJoins])
 
+        if len(self.conditions)!=0:
+            res += '\nWHERE \n'
+            res += indent + f', \n{indent}'.join([condition.rawSqlText for condition in self.conditions])
 
-                if len(joins) == 0:
-                    break
+        if len(self.orderBy)!=0:
+            def orderby_text(expression):
+                typeOfSorting = expression.typeOfSorting
+                if typeOfSorting == 'ASC':
+                    typeOfSorting = ''
+                return f'{expression.field.alias} {typeOfSorting}'
 
+            res += '\nORDER BY \n'
+            res += indent + f', \n{indent}'.join([orderby_text(expression) for expression in self.orderBy])
         self.queryConsructor.textQuery.setText(res)
 
 
