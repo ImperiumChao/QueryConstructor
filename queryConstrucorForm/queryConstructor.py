@@ -35,11 +35,13 @@ class QueryConstructor(QWidget):
         self.query.changedFieldsOrderBy.connect(self.updateOrderBy)
 
         self.setLayout(QHBoxLayout())
+        self.splitterTablesAndFields = QSplitter()
+        self.layout().addWidget(self.splitterTablesAndFields)
         self.textQuery = QTextEdit()
         self.textQuery.setReadOnly(True)
-        self.layout().addWidget(self.textQuery)
+        self.splitterTablesAndFields.addWidget(self.textQuery)
         self.tabsConstructorQuery = QTabWidget()
-        self.layout().addWidget(self.tabsConstructorQuery)
+        self.splitterTablesAndFields.addWidget(self.tabsConstructorQuery)
 
         self.tabTablesAndFields = QWidget()
         self.tabTablesAndFields.setLayout(QHBoxLayout())
@@ -87,7 +89,7 @@ class QueryConstructor(QWidget):
         self.unionsPanelWidget = QWidget()
         self.unionsPanelWidget.setLayout(QHBoxLayout())
         self.addUnionButton = QPushButton('+')
-        self.addUnionButton.pressed.connect(self.addQuery)
+        self.addUnionButton.pressed.connect(self.addUnionQuery)
         self.unionsPanelWidget.layout().addWidget(self.addUnionButton)
         self.unionsPanelWidget.layout().addStretch()
         self.unionsPanelWidget.layout().setContentsMargins(0, 0, 0, 0)
@@ -184,7 +186,7 @@ class QueryConstructor(QWidget):
         self.tabsConstructorQuery.addTab(self.tabOrderBy, "Порядок")
 
 
-        self.addQuery(self.query)
+        self.addUnionQuery(self.query)
         self.currentQuery = self.query
 
 
@@ -216,6 +218,8 @@ class QueryConstructor(QWidget):
 
         self.aliases.setCurrentItem(self.aliases.item(newRow, 0))
         self.query.moveField(row, up, True)
+        for union in self.query.unions:
+            union.query.moveField(row, up, True)
 
     def updateOrderBy(self) -> None:
         """NoDocumentation"""
@@ -320,12 +324,11 @@ class QueryConstructor(QWidget):
         self.moveFildTable(self.fieldsCurrentQuery, row, up)
 
         self.fieldsCurrentQuery.setCurrentItem(self.fieldsCurrentQuery.item(newRow, 0))
-        self.query.moveField(row, up, True)
+        self.currentQuery.moveField(row, up, True)
 
     def setAliasForExpression(self, itm) -> None:
         """NoDocumentation"""
-        expression = itm._object
-        expression.alias = itm.text()
+        self.query.setAliasField(itm._object, itm.text())
 
     def selectedCurrentQuery(self, row, column) -> None:
         """NoDocumentation"""
@@ -379,7 +382,7 @@ class QueryConstructor(QWidget):
         self.fieldsCurrentQuery.setHorizontalHeaderLabels(('Запрос 1',))
 
         n = 0
-        for expression in self.currentQuery.fields:
+        for expression in self.query.fields:
             itm = QTableWidgetItem()
             itm.setText(expression.alias)
             itm._object = expression
@@ -417,7 +420,7 @@ class QueryConstructor(QWidget):
         union = comboBox.union
         union.union = comboBox.currentText()
 
-    def addQuery(self, query=None) -> None:
+    def addUnionQuery(self, query=None) -> None:
         """Добавляем либо первый запрос, либо еще один на объединение"""
         if query==None:
             query = self.query.addUnionQuery()
@@ -442,6 +445,8 @@ class QueryConstructor(QWidget):
         self.tabsConstructorQuery.setCurrentIndex(0)
         self.tabsTablesAndFields.setCurrentIndex(numQuery-1)
 
+        self.currentQuery = query
+        self.updateUnions()
 
     @staticmethod
     def getAddressInStorage(_object) -> str:

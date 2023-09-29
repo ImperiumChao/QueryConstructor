@@ -223,14 +223,14 @@ class JoinsWidget(QWidget):
             if join.table2 == newTable1:
                 comboBoxOtherTable = self.joins.cellWidget(row, 2).comboBox
                 comboBoxOtherTable.setCurrentText(join.table1.alias)
-                join.setTable2(join.table1)
+                join.setTable2(join.table1, noSignal=True)
             join.setTable1(newTable1)
         elif column == 2:
             newTable2 = comboBox.currentData()
             if join.table1 == newTable2:
                 comboBoxOtherTable = self.joins.cellWidget(row, 0).comboBox
                 comboBoxOtherTable.setCurrentText(join.table2.alias)
-                join.setTable1(join.table2)
+                join.setTable1(join.table2, noSignal=True)
             join.setTable2(newTable2)
 
 

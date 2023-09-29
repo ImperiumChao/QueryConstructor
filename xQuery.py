@@ -3,10 +3,11 @@ from PyQt5.QtCore import pyqtSignal, QObject
 from table import Table, SelectedTable, SelectedFieldTable
 from queryConstrucorForm.queryConstructor import QueryConstructor
 from expression import Expression
-from collections import OrderedDict
+from collections import OrderedDict, Counter
 from typing import Dict, List, Union, Tuple
 import pandas as pd
 from types import SimpleNamespace
+
 
 
 class JoinTables():
@@ -23,16 +24,18 @@ class JoinTables():
         self.query.needUpdateTextQuery.emit()
 
 
-    def setTable1(self, table: SelectedTable) -> None:
+    def setTable1(self, table: SelectedTable, noSignal=False) -> None:
         """NoDocumentation"""
         self.table1 = table
-        self.query.needUpdateTextQuery.emit()
+        if not noSignal:
+            self.query.needUpdateTextQuery.emit()
 
 
-    def setTable2(self, table: SelectedTable) -> None:
+    def setTable2(self, table: SelectedTable, noSignal=False) -> None:
         """NoDocumentation"""
         self.table2 = table
-        self.query.needUpdateTextQuery.emit()
+        if not noSignal:
+            self.query.needUpdateTextQuery.emit()
 
     def addCondition(self, expression: Expression) -> None:
         """NoDocumentation"""
@@ -69,6 +72,7 @@ class XQuery(QSqlQuery, QObject):
         # self.foundParameters: Dict[str, str] = dict()
         self.usingGrouping = False
         self.intricateAggregation = False
+        self.isUnionQuery = False
 
         self.needUpdateTextQuery.connect(self.updateTextQuery)
         if len(self.availableTables) == 0:
@@ -79,56 +83,13 @@ class XQuery(QSqlQuery, QObject):
     def updateTextQuery(self) -> None:
         """NoDocumentation"""
         indent = ' ' * 4
-        res = 'SELECT \n'
-        fields = [f'{expression.rawSqlText} AS {expression.alias}' for expression in self.fields]
-        res += indent + f',\n{indent}'.join(fields)
 
-        if len(self.selectedTables) == 0:
-            self.queryConsructor.textQuery.setText(res)
-            return
+        res = self.getTextQuery(self)
+        if len(self.unions)!=0:
+            for union in self.unions:
+                res += f'\n\n{union.union}\n\n{self.getTextQuery(union.query)}'
 
 
-        res += '\nFROM \n'
-
-        tablesWithJoins = set()
-        tablesWithoutJoins = set()
-        for selectedtable in self.selectedTables:
-            if self.find(self.joins, 'table1', selectedtable) != None or\
-                    self.find(self.joins, 'table2', selectedtable) != None:
-                tablesWithJoins.add(selectedtable)
-            else:
-                tablesWithoutJoins.add(selectedtable)
-
-
-        # if len(self.joins) != 0:
-        #     joins = self.joins.copy()
-        #     while True:
-        #         firstTable = None
-        #         for selectedtable in tablesWithJoins:
-        #             if firstTable != None:
-        #                 break
-        #             for join in joins:
-        #                 if selectedtable in (join.table1, join.table2):
-        #                     if join.join == 'LEFT' and selectedtable == join.table2:
-        #                         continue
-        #                     elif join.join == 'RIGHT' and selectedtable == join.table1:
-        #                         continue
-        #                     else:
-        #                         firstTable = selectedtable
-        #                         break
-        #
-        #         res += f'{firstTable.table.name} AS {firstTable.alias}'
-        #         res += self.getTextJoinsForTable(firstTable, joins)
-        #
-        #
-        #         if len(joins) == 0:
-        #             break
-
-        res += indent + f', \n{indent}'.join([f'{selectedTable.table.name} AS {selectedTable.alias}' for selectedTable in tablesWithoutJoins])
-
-        if len(self.conditions)!=0:
-            res += '\nWHERE \n'
-            res += indent + f', \n{indent}'.join([condition.rawSqlText for condition in self.conditions])
 
         if len(self.orderBy)!=0:
             def orderby_text(expression):
@@ -141,30 +102,99 @@ class XQuery(QSqlQuery, QObject):
             res += indent + f', \n{indent}'.join([orderby_text(expression) for expression in self.orderBy])
         self.queryConsructor.textQuery.setText(res)
 
+    def getTextQuery(self, query) -> str:
+        indent = ' ' * 4
+        res = 'SELECT \n'
+        if query.isUnionQuery:
+            fields = [expression.rawSqlText for expression in query.fields]
+        else:
+            fields = [f'{expression.rawSqlText} AS {expression.alias}' for expression in query.fields]
+        res += indent + f',\n{indent}'.join(fields)
 
-    def getTextJoinsForTable(self, table: SelectedTable, joins: List[JoinTables]) -> str:
-        """NoDocumentation"""
-        res = ''
-        for join in joins:
-            if not table in (join.table1, join.table2):
-                continue
+        if len(query.selectedTables) == 0:
+            return res
 
-            if table == join.table1:
-                joinedTable = join.table2
+        res += '\nFROM \n'
+
+        tablesWithJoins = set()
+        tablesWithoutJoins = set()
+
+        tablesWithJoins = {join.table1 for join in query.joins} | {join.table2 for join in query.joins}
+        tablesWithoutJoins = set(query.selectedTables) - tablesWithJoins
+
+        joins = query.joins.copy()
+        while (len(joins) > 0):
+            table = query.getStartingTable(joins)
+            res += query.getChainJoinsForTable(table, joins)
+
+        def textField(expression):
+            if expression.alias=='':
+                return expression.table.name
             else:
-                joinedTable = join.table1
+                return f'{expression.table.name} AS {expression.alias}'
 
-            res += f'\n{join.join} JOIN {joinedTable.table.name} AS {joinedTable.alias}\n'
-            joinscopy = joins.copy()
-            joinscopy.remove(join)
-            # res += self.getTextJoinsForTable(joinedTable, joinscopy)
-            res += 'ON '
-            conditions = list()
-            for expression in join.conditions:
-                conditions.append(expression.rawSqlText)
-            res += ' AND '.join(conditions)
+        res += indent + f', \n{indent}'.join(
+            [textField(selectedTable) for selectedTable in tablesWithoutJoins])
+
+        if len(query.conditions) != 0:
+            res += '\nWHERE \n'
+            res += indent + f', \n{indent}'.join([condition.rawSqlText for condition in query.conditions])
         return res
 
+    def getStartingTable(self, joins:list):
+        counter = Counter()
+        for join in joins:
+            if not self.tableIsSubordinate(join.table1):
+                counter.update({join.table1: 1})
+            if not self.tableIsSubordinate(join.table2):
+                counter.update({join.table2: 1})
+
+        return counter.most_common(1)[0][0]
+
+
+    def getChainJoinsForTable(self, table: SelectedTable, joins:list, level: int=0):
+        level += 1
+        indent = '    '
+
+        joinsTable = []
+        for join in joins:
+            if table in (join.table1, join.table2):
+                joinsTable.append(join)
+
+        for join in joinsTable:
+            joins.remove(join)
+
+        res = f'{table.table.name} AS {table.alias}'
+        for join in joinsTable:
+            if join.table1 == table:
+                tableForJoin = join.table2
+            else:
+                tableForJoin = join.table1
+            res+=f'\n{indent*level}{join.join} JOIN {self.getChainJoinsForTable(tableForJoin, joins, level)}'
+            separator = f'\n{indent*(level+1)}AND '
+            if len(join.conditions)!=0:
+                res+= f'\n{indent*level}ON {separator.join([el.rawSqlText for el in join.conditions])}'
+            else:
+                res+= f'\n{indent*level}ON TRUE'
+        return res
+
+
+
+    def tableIsSubordinate(self, table: SelectedTable, tableIgnore: SelectedTable | None = None) -> bool:
+
+        for join in self.joins:
+            if join.join == 'LEFT' and join.table2 == table:
+                return True
+
+            if table == join.table1 and tableIgnore != join.table2 and join.join !='LEFT':
+                if self.tableIsSubordinate(join.table2, table):
+                    return True
+
+            if table == join.table2 and tableIgnore != join.table1:
+                if self.tableIsSubordinate(join.table1, table):
+                    return True
+
+        return False
 
     def openQueryConstructor(self) -> None:
         """NoDocumentation"""
@@ -245,10 +275,11 @@ class XQuery(QSqlQuery, QObject):
                 table2 = selectedTable
                 joinTables = JoinTables(self, table1, 'INNER', table2)
                 self.joins.append(joinTables)
+                self.needUpdateTextQuery.emit()
+                if not noSignal:
+                    self.changedJoins.emit()
                 return joinTables
-        self.needUpdateTextQuery.emit()
-        if not noSignal:
-            self.changedJoins.emit()
+
 
     def deleteJoin(self, joins, noSignal=False) -> None:
         """NoDocumentation"""
@@ -284,6 +315,8 @@ class XQuery(QSqlQuery, QObject):
     def addUnionQuery(self) -> 'XQuery':
         """NoDocumentation"""
         query = XQuery()
+        query.isUnionQuery = True
+        query.queryConsructor = self.queryConsructor
         union = SimpleNamespace()
         union.query = query
         union.union = 'UNION'
@@ -386,6 +419,11 @@ class XQuery(QSqlQuery, QObject):
             res.append({'aliasTable1': join.table1.alias, 'join': join.join, 'aliasTable2': join.table2.alias})
 
         return res
+
+    def setAliasField(self, expression:Expression, alias:str, noSignal=False) -> None:
+        expression.alias = alias
+        if not noSignal:
+            self.needUpdateTextQuery.emit()
 
     @staticmethod
     def find(objects: object, attribute: str, value: object) -> object:
