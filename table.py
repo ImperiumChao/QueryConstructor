@@ -1,19 +1,29 @@
 import re
 import string
-import xQuery
+# from xQuery import XQuery
+from typing import Dict, List, Union, Tuple
 
 
 class Table():
-    def __init__(self, name: str, sqlText: str):
+    def __init__(self, name: str, sqlText: str = '', query=None):
         self.name = name
         self.sqlText = sqlText
+        self.query = query
 
-        self.createFields(self.sqlText)
+        if not query is None:
+            self.createFieldsForQuery()
+        else:
+            self.createFieldsForSql(self.sqlText)
+
+    def createFieldsForQuery(self):
+        self.fields = list()
+        for field in self.query.fields:
+            self.fields.append(FieldTable(self, name=field.alias))
 
     def __str__(self):
         return self.name
 
-    def createFields(self, sqlText: str) -> None:
+    def createFieldsForSql(self, sqlText: str) -> None:
         """NoDocumentation"""
         textInParentheses = sqlText[sqlText.find('('):sqlText.find(');')]
         textInParentheses = textInParentheses.replace('(', '')
@@ -35,11 +45,16 @@ class Table():
             if sqlField.find('FOREIGN KEY') == -1:
                 self.fields.append(FieldTable(self, sqlField))
 
+
 class FieldTable():
-    def __init__(self, table: Table, sqlCreateTable: str):
+    def __init__(self, table: Table, sqlCreateTable: str = '', name: str = ''):
         self.table = table
-        self.sqlCreateTable = sqlCreateTable
-        self.name = sqlCreateTable[0:sqlCreateTable.find(' ')]
+        if sqlCreateTable == '':
+            self.sqlCreateTable = name
+            self.name = name
+        else:
+            self.sqlCreateTable = sqlCreateTable
+            self.name = sqlCreateTable[0:sqlCreateTable.find(' ')]
 
         text = sqlCreateTable[len(self.name):].strip()
         self.typeField = text.split(' ')[0]
@@ -65,7 +80,6 @@ class SelectedTable():
         return xQuery.XQuery.find(self.fields, 'fieldTable', field)
 
 
-
 class SelectedFieldTable():
     def __init__(self, selectedTable: "SelectedTable", fildTable: FieldTable):
         self.table = selectedTable.table
@@ -76,10 +90,3 @@ class SelectedFieldTable():
 
     def __str__(self):
         return self.path
-
-
-
-
-
-
-

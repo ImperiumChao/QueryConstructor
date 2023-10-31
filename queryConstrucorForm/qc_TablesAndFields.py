@@ -10,6 +10,7 @@ from expression import Expression
 from typing import Union
 from widgets.expressionEditor import ExpressonEditor
 
+
 class TablesAndFieldsWidget(QWidget):
     dragAndDrop = dict()
 
@@ -18,6 +19,7 @@ class TablesAndFieldsWidget(QWidget):
         self.query = query
         self.query.changedFieldsQuery.connect(self.updateFieldsQuery)
         self.query.changedSelectedTables.connect(self.updateSelectedTables)
+        self.query.changedAvailableTables.connect(self.updateAvailableTables)
 
         self.deleteshortcut = QShortcut(self)
         self.deleteshortcut.setKey(Qt.Key_Delete)
@@ -39,7 +41,6 @@ class TablesAndFieldsWidget(QWidget):
         self.availableTablesPanelWidget.setLayout(QHBoxLayout())
         self.availableTablesWidget.layout().addWidget(self.availableTablesPanelWidget)
 
-
         self.addSubQuery = QPushButton()
         self.addSubQuery.setText("+")
         self.availableTablesPanelWidget.layout().addWidget(self.addSubQuery)
@@ -47,7 +48,7 @@ class TablesAndFieldsWidget(QWidget):
         self.availableTablesPanelWidget.layout().setContentsMargins(0, 0, 0, 0)
 
         self.availableTables = XTreeWidget()
-        self.availableTables.setHeaderLabel('Доступные таблицы')
+
         self.availableTablesWidget.layout().addWidget(self.availableTables)
         self.availableTables.mouseDoubleClicked.connect(self.addToSelectedTables)
 
@@ -65,7 +66,6 @@ class TablesAndFieldsWidget(QWidget):
         self.selectedTablesPanelWidget.layout().addWidget(self.replaceTableButton)
         self.selectedTablesPanelWidget.layout().addStretch()
         self.selectedTablesPanelWidget.layout().setContentsMargins(0, 0, 0, 0)
-
 
         self.selectedTables = XTreeWidget()
         self.selectedTables.setHeaderLabel('Выбранные таблицы')
@@ -96,8 +96,27 @@ class TablesAndFieldsWidget(QWidget):
         self.selectedFieldsWidget.layout().addWidget(self.selectedFields)
         self.selectedFields.dropped.connect(self.addToSelectedFields)
         self.selectedFields.mouseDoubleClicked.connect(self.editExpression)
+        self.updateAvailableTables()
 
-        for name, table in qc.XQuery.availableTables.items():
+    def updateAvailableTables(self):
+        self.availableTables.clear()
+        self.availableTables.setHeaderLabel('Доступные таблицы')
+
+        for table in qc.XQuery.tablesTemp:
+            if table.query == self.query:
+                break
+            itemTable = QTreeWidgetItem()
+            itemTable.setText(0, table.name)
+            itemTable._object = table
+            for field in table.fields:
+                itemChield = QTreeWidgetItem()
+                itemChield.setText(0, field.name)
+                itemChield._object = field
+                itemTable.addChild(itemChield)
+
+            self.availableTables.addTopLevelItem(itemTable)
+
+        for name, table in qc.XQuery.tablesDB.items():
             itemTable = QTreeWidgetItem()
             itemTable.setText(0, name)
             itemTable._object = table
@@ -142,7 +161,6 @@ class TablesAndFieldsWidget(QWidget):
                 self.query.addFieldQuery(selectedFieldTable)
         elif type(_object) is SelectedFieldTable:
             self.query.addFieldQuery(_object)
-
 
     def updateFieldsQuery(self) -> None:
         """NoDocumentation"""
@@ -204,7 +222,6 @@ class TablesAndFieldsWidget(QWidget):
                 self.selectedTables.deleteBranch(selectedTable)
                 self.query.deleteSelectedTable(selectedTable)
 
-
     def editExpression(self, expression: Expression) -> None:
         """NoDocumentation"""
         self.expressonEditor = ExpressonEditor(self, self.selectedTables.clone(), expression)
@@ -221,4 +238,3 @@ class TablesAndFieldsWidget(QWidget):
                 break
 
         self.query.changedFieldsQuery.emit()
-

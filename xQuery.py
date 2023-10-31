@@ -5,9 +5,18 @@ from queryConstrucorForm.queryConstructor import QueryConstructor
 from expression import Expression
 from collections import OrderedDict, Counter
 from typing import Dict, List, Union, Tuple
+from itertools import count
 import pandas as pd
 from types import SimpleNamespace
+from enum import Enum
 
+
+class TypesQuery(Enum):
+    main = 1
+    union = 2
+    unionAll = 3
+    temp = 4
+    subQuery = 5
 
 
 class JoinTables():
@@ -23,13 +32,11 @@ class JoinTables():
         self.join = typeJoin
         self.query.needUpdateTextQuery.emit()
 
-
     def setTable1(self, table: SelectedTable, noSignal=False) -> None:
         """NoDocumentation"""
         self.table1 = table
         if not noSignal:
             self.query.needUpdateTextQuery.emit()
-
 
     def setTable2(self, table: SelectedTable, noSignal=False) -> None:
         """NoDocumentation"""
@@ -49,7 +56,11 @@ class JoinTables():
 
 
 class XQuery(QSqlQuery, QObject):
-    availableTables: Dict[str, Table] = dict()
+    tablesDB: Dict[str, Table] = dict()
+    tablesTemp: List[Table] = list()
+    subqueries: List[Table] = list()
+    mainQuery: 'XQuery' = None
+    queryConstructor = None
 
     changedSelectedTables = pyqtSignal()
     changedFieldsQuery = pyqtSignal()
@@ -59,9 +70,14 @@ class XQuery(QSqlQuery, QObject):
     changedConditionsAfterGrouping = pyqtSignal()
     changedFieldsOrderBy = pyqtSignal()
     needUpdateTextQuery = pyqtSignal()
+    addedUnionQuery = pyqtSignal(object)
+    changedAvailableTables = pyqtSignal()
 
     def __init__(self):
         super().__init__()
+        if XQuery.mainQuery is None:
+            XQuery.mainQuery = self
+
         self.selectedTables: Lict[SelectedTable] = list()
         self.fields: List[Expression] = list()
         self.joins: List[JoinTables] = list()
@@ -73,25 +89,41 @@ class XQuery(QSqlQuery, QObject):
         self.usingGrouping = False
         self.intricateAggregation = False
         self.isUnionQuery = False
+        self.name = '*main*'
+        self.type = TypesQuery.main
 
         self.needUpdateTextQuery.connect(self.updateTextQuery)
-        if len(self.availableTables) == 0:
-            XQuery.updateAvailableTables()
+        if len(self.tablesDB) == 0:
+            XQuery.updateTablesDB()
 
-        print(self.availableTables)
+        print(self.tablesDB)
+
+    @classmethod
+    def addQuery(cls):
+        cls.mainQuery.type = TypesQuery.temp
+
+        namesTables = [table.name for table in XQuery.tablesTemp]
+        for i in count(1):
+            newName = f'query{i}'
+            if newName not in namesTables:
+                XQuery.mainQuery.name = newName
+                break
+
+        cls.tablesTemp.append(Table(XQuery.mainQuery.name, query=XQuery.mainQuery))
+        cls.mainQuery = cls()
+
+        return cls.mainQuery
 
     def updateTextQuery(self) -> None:
         """NoDocumentation"""
         indent = ' ' * 4
 
         res = self.getTextQuery(self)
-        if len(self.unions)!=0:
+        if len(self.unions) != 0:
             for union in self.unions:
                 res += f'\n\n{union.union}\n\n{self.getTextQuery(union.query)}'
 
-
-
-        if len(self.orderBy)!=0:
+        if len(self.orderBy) != 0:
             def orderby_text(expression):
                 typeOfSorting = expression.typeOfSorting
                 if typeOfSorting == 'ASC':
@@ -100,7 +132,7 @@ class XQuery(QSqlQuery, QObject):
 
             res += '\nORDER BY \n'
             res += indent + f', \n{indent}'.join([orderby_text(expression) for expression in self.orderBy])
-        self.queryConsructor.textQuery.setText(res)
+        XQuery.queryConstructor.textQuery.setText(res)
 
     def getTextQuery(self, query) -> str:
         indent = ' ' * 4
@@ -128,7 +160,7 @@ class XQuery(QSqlQuery, QObject):
             res += query.getChainJoinsForTable(table, joins)
 
         def textField(expression):
-            if expression.alias=='':
+            if expression.alias == '':
                 return expression.table.name
             else:
                 return f'{expression.table.name} AS {expression.alias}'
@@ -141,7 +173,7 @@ class XQuery(QSqlQuery, QObject):
             res += indent + f', \n{indent}'.join([condition.rawSqlText for condition in query.conditions])
         return res
 
-    def getStartingTable(self, joins:list):
+    def getStartingTable(self, joins: list):
         counter = Counter()
         for join in joins:
             if not self.tableIsSubordinate(join.table1):
@@ -151,8 +183,7 @@ class XQuery(QSqlQuery, QObject):
 
         return counter.most_common(1)[0][0]
 
-
-    def getChainJoinsForTable(self, table: SelectedTable, joins:list, level: int=0):
+    def getChainJoinsForTable(self, table: SelectedTable, joins: list, level: int = 0):
         level += 1
         indent = '    '
 
@@ -170,15 +201,13 @@ class XQuery(QSqlQuery, QObject):
                 tableForJoin = join.table2
             else:
                 tableForJoin = join.table1
-            res+=f'\n{indent*level}{join.join} JOIN {self.getChainJoinsForTable(tableForJoin, joins, level)}'
-            separator = f'\n{indent*(level+1)}AND '
-            if len(join.conditions)!=0:
-                res+= f'\n{indent*level}ON {separator.join([el.rawSqlText for el in join.conditions])}'
+            res += f'\n{indent * level}{join.join} JOIN {self.getChainJoinsForTable(tableForJoin, joins, level)}'
+            separator = f'\n{indent * (level + 1)}AND '
+            if len(join.conditions) != 0:
+                res += f'\n{indent * level}ON {separator.join([el.rawSqlText for el in join.conditions])}'
             else:
-                res+= f'\n{indent*level}ON TRUE'
+                res += f'\n{indent * level}ON TRUE'
         return res
-
-
 
     def tableIsSubordinate(self, table: SelectedTable, tableIgnore: SelectedTable | None = None) -> bool:
 
@@ -186,7 +215,7 @@ class XQuery(QSqlQuery, QObject):
             if join.join == 'LEFT' and join.table2 == table:
                 return True
 
-            if table == join.table1 and tableIgnore != join.table2 and join.join !='LEFT':
+            if table == join.table1 and tableIgnore != join.table2 and join.join != 'LEFT':
                 if self.tableIsSubordinate(join.table2, table):
                     return True
 
@@ -198,11 +227,11 @@ class XQuery(QSqlQuery, QObject):
 
     def openQueryConstructor(self) -> None:
         """NoDocumentation"""
-        if hasattr(self, 'queryConsructor'):
-            self.queryConsructor.show()
+        if XQuery.queryConstructor is None:
+            XQuery.queryConstructor = QueryConstructor(self)
+            XQuery.queryConstructor.show()
         else:
-            self.queryConsructor = QueryConstructor(self)
-            self.queryConsructor.show()
+            XQuery.queryConstructor.show()
 
     def addSelectedTable(self, table: Table, noSignal=False) -> SelectedTable:
         """NoDocumentation"""
@@ -280,7 +309,6 @@ class XQuery(QSqlQuery, QObject):
                     self.changedJoins.emit()
                 return joinTables
 
-
     def deleteJoin(self, joins, noSignal=False) -> None:
         """NoDocumentation"""
         self.joins.remove(joins)
@@ -296,7 +324,6 @@ class XQuery(QSqlQuery, QObject):
         if not noSignal:
             self.changedGroupingData.emit()
 
-
     def deleteAggregationField(self, expression: Expression, noSignal=False) -> None:
         """NoDocumentation"""
         expression.setAggregationFunction('')
@@ -311,16 +338,16 @@ class XQuery(QSqlQuery, QObject):
         if not noSignal:
             self.changedGroupingData.emit()
 
-
     def addUnionQuery(self) -> 'XQuery':
         """NoDocumentation"""
         query = XQuery()
-        query.isUnionQuery = True
-        query.queryConsructor = self.queryConsructor
+        query.name = 'unionAll'
+        query.type = TypesQuery.unionAll
         union = SimpleNamespace()
         union.query = query
         union.union = 'UNION'
         self.unions.append(union)
+        self.addedUnionQuery.emit(query)
         return query
 
     def deleteUnionQuery(self, query) -> None:
@@ -399,9 +426,8 @@ class XQuery(QSqlQuery, QObject):
         if not noSignal:
             self.changedFieldsOrderBy.emit()
 
-
     @classmethod
-    def updateAvailableTables(cls):
+    def updateTablesDB(cls):
         query = QSqlQuery()
         query.prepare('SELECT name, sql FROM sqlite_master WHERE type=\'table\' AND name <> \"sqlite_sequence\"')
         query.exec()
@@ -409,7 +435,7 @@ class XQuery(QSqlQuery, QObject):
         while (query.next()):
             name = query.value('name')
             sql = query.value('sql')
-            cls.availableTables[name] = Table(name, sql)
+            cls.tablesDB[name] = Table(name, sql)
 
     def getPandasDataFrameJoins(self) -> pd.DataFrame:
         """NoDocumentation"""
@@ -420,7 +446,7 @@ class XQuery(QSqlQuery, QObject):
 
         return res
 
-    def setAliasField(self, expression:Expression, alias:str, noSignal=False) -> None:
+    def setAliasField(self, expression: Expression, alias: str, noSignal=False) -> None:
         expression.alias = alias
         if not noSignal:
             self.needUpdateTextQuery.emit()
