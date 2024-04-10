@@ -1,8 +1,9 @@
 ﻿from PyQt5.QtWidgets import QWidget, QTabWidget, QTreeWidget, QListWidget, QPushButton, QVBoxLayout, \
-    QHBoxLayout, QSplitter, QTableWidget, QTextEdit, QShortcut, QTableWidgetItem, QLineEdit, QComboBox, QTreeWidgetItem
+    QHBoxLayout, QSplitter, QTableWidget, QTextEdit, QShortcut, QTableWidgetItem, QLineEdit, QComboBox, \
+    QTreeWidgetItem, QCheckBox, QSizePolicy
 
 from PyQt5 import QtCore
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal, QObject
 from queryConstrucorForm.qc_Conditions import ConditionsWidget
 from queryConstrucorForm.qc_Grouping import GroupingWidget
 from queryConstrucorForm.qc_SubQueries import SubQueriesWidget
@@ -22,25 +23,35 @@ from collections import namedtuple
 
 class QueryConstructor(QWidget):
     dragAndDrop = dict()
+    executeQuery = pyqtSignal()
 
     def __init__(self, query):
         super().__init__()
-
-        self.deleteshortcut = QShortcut(self)
-        self.deleteshortcut.setKey(Qt.Key_Delete)
-        self.deleteshortcut.activated.connect(self.deleteObject)
+        self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.WindowMinimizeButtonHint)
+        # self.deleteshortcut = QShortcut(self)
+        # self.deleteshortcut.setKey(Qt.Key_Delete)
+        # self.deleteshortcut.activated.connect(self.deleteObject)
 
         self.setWindowTitle('Конструктор запросов')
         self.query = query
+        self.XQuery = type(query)
+        self.TypesQuery = type(query.type)
 
-        self.setLayout(QHBoxLayout())
-        self.splitterTablesAndFields = QSplitter()
-        self.layout().addWidget(self.splitterTablesAndFields)
+        self.setLayout(QVBoxLayout())
+        self.splitter = QSplitter()
+        self.layout().addWidget(self.splitter)
         self.textQuery = QTextEdit()
         self.textQuery.setReadOnly(True)
-        self.splitterTablesAndFields.addWidget(self.textQuery)
+        self.splitter.addWidget(self.textQuery)
+
+        self.parameters = QTableWidget()
+        self.parameters.cellChanged.connect(self.setParameter)
+        self.splitter.addWidget(self.parameters)
+        self.parameters.setColumnCount(2)
+        self.parameters.horizontalHeader().setStretchLastSection(True)
+
         self.tabsConstructorQuery = QTabWidget()
-        self.splitterTablesAndFields.addWidget(self.tabsConstructorQuery)
+        self.splitter.addWidget(self.tabsConstructorQuery)
 
         self.tabTablesAndFields = QWidget()
         self.tabTablesAndFields.setLayout(QHBoxLayout())
@@ -50,12 +61,6 @@ class QueryConstructor(QWidget):
         self.tabTablesAndFields.tabsQueries.setTabPosition(QTabWidget.East)
 
         self.tabTablesAndFields.layout().addWidget(self.tabTablesAndFields.tabsQueries)
-        # self.tabTablesAndFields.tabSubqueries = QWidget()
-        # self.tabTablesAndFields.tabsQueries.addTab(self.tabTablesAndFields.tabSubqueries, "Вложенные запросы")
-
-        # self.tabsUnionsTablesAndFields = QTabWidget()
-        # self.tabsUnionsTablesAndFields.setTabBarAutoHide(True)
-        # self.tabsUnionsTablesAndFields.setTabPosition(QTabWidget.East)
 
         self.tabJoins = QWidget()
         self.tabJoins.setLayout(QVBoxLayout())
@@ -127,24 +132,72 @@ class QueryConstructor(QWidget):
         self.queriesWidget.layout().addWidget(self.queryPanelWidget)
 
         self.queries = QTableWidget()
+        self.queries.itemChanged.connect(self.renameTable)
         self.queriesWidget.layout().addWidget(self.queries)
 
         self.tabQueries.layout().addWidget(self.queriesWidget)
 
         self.queries.setColumnCount(2)
         self.queries.horizontalHeader().setStretchLastSection(True)
-        # self.queries.setRowCount(1)
-        #
-        # self.queries.setHorizontalHeaderLabels(('Имя', 'Вложенный'))
-        #
-        # itm = QTableWidgetItem()
-        # itm.setText('*main*')
-        # itm.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-        # itm._object = self.query
-        # self.queries.setItem(0, 0, itm)
+
+        self.lowerPanel = QWidget()
+        self.lowerPanel.setLayout(QHBoxLayout())
+        self.lowerPanel.layout().addStretch()
+        self.buttonExecute = QPushButton('Выполнить')
+        self.buttonExecute.clicked.connect(lambda: self.executeQuery.emit())
+        self.lowerPanel.layout().addWidget(self.buttonExecute)
+        self.layout().addWidget(self.lowerPanel)
+        self.lowerPanel.layout().setContentsMargins(0, 0, 0, 0)
+
+        sizePolicy = QSizePolicy()
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHorizontalStretch(255)
+        self.lowerPanel.setSizePolicy(sizePolicy)
 
         self.addQuery(self.query)
         self.setCurrentQueryByIndex(0)
+        self.updateParameters()
+
+    def renameTable(self, itm):
+        table = itm._object
+        table.name = itm.text()
+
+    def setParameter(self, row: int, column: int):
+        param = self.parameters.item(row, 0).text()
+        value = self.parameters.item(row, 1).text()
+        type(self.query).mainQuery.parameters[param] = value
+
+    def updateTextQuery(self):
+        self.textQuery.setText(self.XQuery.mainQuery.textQuery)
+        self.updateParameters()
+
+    def updateParameters(self):
+        # parameters = dict()
+        # for row in range(self.parameters.rowCount()):
+        #     parameters[self.parameters.item(row, 0).text()] = parameters[self.parameters.item(row, 1).text()]
+
+        self.parameters.clear()
+        self.parameters.setHorizontalHeaderLabels(['Параметр', 'Значение'])
+        parametersQuery = self.XQuery.mainQuery.parameters
+        self.parameters.setRowCount(len(parametersQuery))
+
+        for row, (param, value) in enumerate(type(self.query).mainQuery.parameters.items()):
+            self.parameters.cellChanged.disconnect()
+
+            itm = QTableWidgetItem()
+            itm.setText(param)
+            itm.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+
+            self.parameters.setItem(row, 0, itm)
+
+            itm = QTableWidgetItem()
+            if value != None:
+                itm.setText(value)
+            # itm.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+
+            self.parameters.setItem(row, 1, itm)
+
+            self.parameters.cellChanged.connect(self.setParameter)
 
     def setCurrentQueryByIndex(self, index: int):
         tabs = (self.tabTablesAndFields,
@@ -166,7 +219,7 @@ class QueryConstructor(QWidget):
 
     def addQuery(self, query=None):
         if query == None:
-            query = type(self.query).addQuery()
+            query = self.XQuery.addQuery()
 
         query.addedUnionQuery.connect(self.addUnionQuery)
 
@@ -181,19 +234,9 @@ class QueryConstructor(QWidget):
             tabQuery._object = query
             tab.tabsQueries.addTab(tabQuery, query.name)
 
-            self.queries.clear()
-            self.queries.setColumnCount(2)
-            self.queries.setHorizontalHeaderLabels(['Имя', 'Вложенный'])
-            self.queries.setRowCount(tab.tabsQueries.count())
-
             for i in range(tab.tabsQueries.count()):
                 query = tab.tabsQueries.widget(i)._object
                 tab.tabsQueries.setTabText(i, query.name)
-                itm = QTableWidgetItem()
-                itm.setText(query.name)
-                itm.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-                itm._object = query
-                self.queries.setItem(i, 0, itm)
 
             tabsUnion = QTabWidget()
             tabQuery.tabsUnion = tabsUnion
@@ -222,6 +265,44 @@ class QueryConstructor(QWidget):
                 tab.tabsQueries.setTabText(i, query.name)
 
         # self.updateUnions()
+        self.queries.clear()
+        self.queries.setColumnCount(2)
+        self.queries.setHorizontalHeaderLabels(['Имя', 'Вложенный'])
+        self.queries.setRowCount(len(self.XQuery.subqueries + self.XQuery.tablesTemp) + 1)
+
+        for i, table in enumerate(self.XQuery.subqueries + self.XQuery.tablesTemp):
+            itm = QTableWidgetItem()
+            itm.setText(table.name)
+            itm._object = table
+            self.queries.setItem(i, 0, itm)
+
+            itm = QCheckBox()
+            itm._object = table
+            itm.setChecked(table.query.type == 5)
+            itm.stateChanged.connect(self.changeTypeTable)
+            self.queries.setCellWidget(i, 1, itm)
+
+        itm = QTableWidgetItem()
+        itm.setText('**main**')
+        itm.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+        itm._object = self.XQuery.mainQuery
+        self.queries.setItem(self.queries.rowCount() - 1, 0, itm)
+
+    def changeTypeTable(self, state):
+        table = self.sender()._object
+        isTemp = state == 0
+
+        if isTemp and table in self.XQuery.subqueries:
+            self.XQuery.subqueries.remove(table)
+            self.XQuery.tablesTemp.insert(0, table)
+            table.query.type = self.TypesQuery.temp
+        elif not isTemp and table in self.XQuery.tablesTemp:
+            self.XQuery.tablesTemp.remove(table)
+            self.XQuery.subqueries.append(table)
+            table.query.type = self.TypesQuery.subQuery
+        self.XQuery.updateTextQueries()
+        self.textQuery.setText(self.XQuery.mainQuery.textQuery)
+        # table.query.needUpdateTextQuery.emit()
 
     def addUnionQuery(self, query):
 

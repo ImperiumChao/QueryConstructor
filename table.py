@@ -5,62 +5,49 @@ from typing import Dict, List, Union, Tuple
 
 
 class Table():
-    def __init__(self, name: str, sqlText: str = '', query=None):
+
+    def __init__(self, name: str, fields=[], query=None):
         self.name = name
-        self.sqlText = sqlText
         self.query = query
 
         if not query is None:
-            self.createFieldsForQuery()
+            self.fields = list()
+            for field in self.query.fields:
+                self.fields.append(FieldTable(self, name=field.alias))
         else:
-            self.createFieldsForSql(self.sqlText)
-
-    def createFieldsForQuery(self):
-        self.fields = list()
-        for field in self.query.fields:
-            self.fields.append(FieldTable(self, name=field.alias))
+            self.fields = list()
+            for field in fields:
+                self.fields.append(FieldTable(self, name=field.name, referencePath=field.reference))
 
     def __str__(self):
         return self.name
 
-    def createFieldsForSql(self, sqlText: str) -> None:
-        """NoDocumentation"""
-        textInParentheses = sqlText[sqlText.find('('):sqlText.find(');')]
-        textInParentheses = textInParentheses.replace('(', '')
-        textInParentheses = textInParentheses.replace(')', '')
-        textInParentheses = textInParentheses.replace('\"', '')
-        textInParentheses = textInParentheses.replace('`', '')
-        textInParentheses = textInParentheses.replace('\t', ' ')
-        textInParentheses = textInParentheses.replace('\n', ' ')
-        textInParentheses = textInParentheses.strip()
-
-        for i in range(10):
-            textInParentheses = textInParentheses.replace('  ', ' ')
-
-        descriptionFields = textInParentheses.split(',')
-        self.fields = list()
-
-        for sqlField in descriptionFields:
-            sqlField = sqlField.strip()
-            if sqlField.find('FOREIGN KEY') == -1:
-                self.fields.append(FieldTable(self, sqlField))
+    @classmethod
+    def findReferences(cls):
+        for path, field in FieldTable.fields.items():
+            if field.referencePath != '':
+                field.fieldTableReference = FieldTable.fields[field.referencePath]
 
 
 class FieldTable():
-    def __init__(self, table: Table, sqlCreateTable: str = '', name: str = ''):
-        self.table = table
-        if sqlCreateTable == '':
-            self.sqlCreateTable = name
-            self.name = name
-        else:
-            self.sqlCreateTable = sqlCreateTable
-            self.name = sqlCreateTable[0:sqlCreateTable.find(' ')]
+    fields = dict()
 
-        text = sqlCreateTable[len(self.name):].strip()
-        self.typeField = text.split(' ')[0]
+    def __init__(self, table: Table, name: str = '', referencePath=''):
+        self.table = table
+        self.name = name
+        if referencePath == None:
+            self.referencePath = ''
+        else:
+            self.referencePath = referencePath
+        self.fieldTableReference = None
+        self.path = f'{self.table.name}.{self.name}'
+        self.fields[self.path] = self
 
     def __str__(self):
-        return f'{self.table.name}.{self.name}'
+        return self.path
+
+    def __del__(self):
+        self.fields.remove(self)
 
 
 class SelectedTable():
@@ -77,7 +64,8 @@ class SelectedTable():
 
     def getSelectedField(self, field: FieldTable) -> "SelectedFieldTable":
         """NoDocumentation"""
-        return xQuery.XQuery.find(self.fields, 'fieldTable', field)
+        tmp = [f for f in self.fields if f.fieldTable == field]
+        return tmp[0]
 
 
 class SelectedFieldTable():

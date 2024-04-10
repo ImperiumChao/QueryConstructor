@@ -1,11 +1,12 @@
 from PyQt5.QtWidgets import QWidget, QSplitter, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTreeWidget, \
-    QTreeWidgetItem, QSpacerItem, QTableWidgetItem, QShortcut
+    QTreeWidgetItem, QSpacerItem, QTableWidgetItem, QShortcut, QMenu, QAction
 from table import Table, FieldTable, SelectedTable, SelectedFieldTable
 
 import xQuery as qc
 from widgets.xTreeWidget import XTreeWidget
 from widgets.xTableWidget import XTableWidget
-from PyQt5.QtCore import pyqtSignal, Qt
+from PyQt5.QtCore import pyqtSignal, Qt, QObject
+from PyQt5.QtGui import QCursor
 from expression import Expression
 from typing import Union
 from widgets.expressionEditor import ExpressonEditor
@@ -37,15 +38,15 @@ class TablesAndFieldsWidget(QWidget):
         # self.availableTablesWidget.layout().setContentsMargins(4, 4, 4, 4)
         self.splitter.addWidget(self.availableTablesWidget)
 
-        self.availableTablesPanelWidget = QWidget()
-        self.availableTablesPanelWidget.setLayout(QHBoxLayout())
-        self.availableTablesWidget.layout().addWidget(self.availableTablesPanelWidget)
+        # self.availableTablesPanelWidget = QWidget()
+        # self.availableTablesPanelWidget.setLayout(QHBoxLayout())
+        # self.availableTablesWidget.layout().addWidget(self.availableTablesPanelWidget)
 
-        self.addSubQuery = QPushButton()
-        self.addSubQuery.setText("+")
-        self.availableTablesPanelWidget.layout().addWidget(self.addSubQuery)
-        self.availableTablesPanelWidget.layout().addStretch()
-        self.availableTablesPanelWidget.layout().setContentsMargins(0, 0, 0, 0)
+        # self.addSubQuery = QPushButton()
+        # self.addSubQuery.setText("+")
+        # self.availableTablesPanelWidget.layout().addWidget(self.addSubQuery)
+        # self.availableTablesPanelWidget.layout().addStretch()
+        # self.availableTablesPanelWidget.layout().setContentsMargins(0, 0, 0, 0)
 
         self.availableTables = XTreeWidget()
 
@@ -56,16 +57,16 @@ class TablesAndFieldsWidget(QWidget):
         self.selectedTablesWidget.setLayout(QVBoxLayout())
         self.splitter.addWidget(self.selectedTablesWidget)
 
-        self.selectedTablesPanelWidget = QWidget()
-        self.selectedTablesPanelWidget.setLayout(QHBoxLayout())
-        self.selectedTablesWidget.layout().addWidget(self.selectedTablesPanelWidget)
+        # self.selectedTablesPanelWidget = QWidget()
+        # self.selectedTablesPanelWidget.setLayout(QHBoxLayout())
+        # self.selectedTablesWidget.layout().addWidget(self.selectedTablesPanelWidget)
 
-        self.replaceTableButton = QPushButton()
-        self.replaceTableButton.setText("=")
-        self.replaceTableButton.clicked.connect(self.replaceTable)
-        self.selectedTablesPanelWidget.layout().addWidget(self.replaceTableButton)
-        self.selectedTablesPanelWidget.layout().addStretch()
-        self.selectedTablesPanelWidget.layout().setContentsMargins(0, 0, 0, 0)
+        # self.replaceTableButton = QPushButton()
+        # self.replaceTableButton.setText("=")
+        # self.replaceTableButton.clicked.connect(self.replaceTable)
+        # self.selectedTablesPanelWidget.layout().addWidget(self.replaceTableButton)
+        # self.selectedTablesPanelWidget.layout().addStretch()
+        # self.selectedTablesPanelWidget.layout().setContentsMargins(0, 0, 0, 0)
 
         self.selectedTables = XTreeWidget()
         self.selectedTables.setHeaderLabel('Выбранные таблицы')
@@ -73,20 +74,21 @@ class TablesAndFieldsWidget(QWidget):
         self.selectedTables.dropped.connect(self.addToSelectedTables)
         self.selectedTables.mouseDoubleClicked.connect(self.addToSelectedFields)
         self.selectedTables.delete.connect(self.deleteSelectedTable)
+        self.selectedTables.mouseMiddleButtonPressed.connect(self.addReferenceTable)
 
         self.selectedFieldsWidget = QWidget()
         self.selectedFieldsWidget.setLayout(QVBoxLayout())
         self.splitter.addWidget(self.selectedFieldsWidget)
 
-        self.selectedFieldsPanelWidget = QWidget()
-        self.selectedFieldsPanelWidget.setLayout(QHBoxLayout())
-        self.selectedFieldsWidget.layout().addWidget(self.selectedFieldsPanelWidget)
+        # self.selectedFieldsPanelWidget = QWidget()
+        # self.selectedFieldsPanelWidget.setLayout(QHBoxLayout())
+        # self.selectedFieldsWidget.layout().addWidget(self.selectedFieldsPanelWidget)
 
-        self.addExpression = QPushButton()
-        self.addExpression.setText("+")
-        self.selectedFieldsPanelWidget.layout().addWidget(self.addExpression)
-        self.selectedFieldsPanelWidget.layout().addStretch()
-        self.selectedFieldsPanelWidget.layout().setContentsMargins(0, 0, 0, 0)
+        # self.addExpression = QPushButton()
+        # self.addExpression.setText("+")
+        # self.selectedFieldsPanelWidget.layout().addWidget(self.addExpression)
+        # self.selectedFieldsPanelWidget.layout().addStretch()
+        # self.selectedFieldsPanelWidget.layout().setContentsMargins(0, 0, 0, 0)
 
         self.selectedFields = XTableWidget()
         self.selectedFields.verticalHeader().hide()
@@ -96,7 +98,60 @@ class TablesAndFieldsWidget(QWidget):
         self.selectedFieldsWidget.layout().addWidget(self.selectedFields)
         self.selectedFields.dropped.connect(self.addToSelectedFields)
         self.selectedFields.mouseDoubleClicked.connect(self.editExpression)
+
+        # self.selectedFields.itemDoubleClicked.connect(self.editExpression)
+
+        # self.selectedFields.mouseRightButtonPressed.connect(self.execMenuSelectedFields)
+        self.selectedFields.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.selectedFields.customContextMenuRequested.connect(self.execMenuSelectedFields)
+
         self.updateAvailableTables()
+
+    def addReferenceTable(self, field):
+        if type(field) != SelectedFieldTable or field.fieldTable.fieldTableReference == None:
+            return
+        self.addToSelectedTables(field.fieldTable.fieldTableReference.table)
+        self.query.addJoinAuto()
+
+    def execMenuSelectedFields(self, point):
+        self.selectedFields.menu = QMenu(self)
+
+        a = QAction('Добавить', self)
+        a.triggered.connect(self.addEmptyField)
+        self.selectedFields.menu.addAction(a)
+
+        if 'SUM(0)' not in [expression.rawSqlText for expression in self.query.fields]:
+            a = QAction('Добавить SUM(0)', self)
+            a.triggered.connect(self.addSUM0)
+            self.selectedFields.menu.addAction(a)
+
+        currentItem = self.selectedFields.currentItem()
+        if currentItem != None:
+
+            aggFunctions = ['SUM', 'MIN', 'MAX', 'AVG', 'COUNT', 'COUNT( DISTRICT']
+            for el in aggFunctions:
+                a = QAction(f'Обернуть в {el}', self)
+                a.aggFunction = el
+                a.triggered.connect(self.wrapAggFunction)
+                self.selectedFields.menu.addAction(a)
+
+        self.selectedFields.menu.move(QCursor.pos())
+        self.selectedFields.menu.show()
+        print('df')
+
+    def addEmptyField(self):
+        _expression = self.query.addExpression('NULL')
+        self.editExpression(_expression)
+
+    def wrapAggFunction(self):
+        aggFunction = self.sender().aggFunction
+        if '(' not in aggFunction:
+            aggFunction += '('
+        _expression = self.selectedFields.currentItem()._object
+        _expression.setAggregationFunction(aggFunction)
+
+    def addSUM0(self):
+        _expression = self.query.addExpression('SUM(0)', 'SUM0')
 
     def updateAvailableTables(self):
         self.availableTables.clear()
@@ -122,15 +177,21 @@ class TablesAndFieldsWidget(QWidget):
             itemTable._object = table
             for field in table.fields:
                 itemChield = QTreeWidgetItem()
-                itemChield.setText(0, field.name)
+                if field.fieldTableReference == None:
+                    itemChield.setText(0, field.name)
+                else:
+                    itemChield.setText(0, f'{field.name} ({field.fieldTableReference.table})')
                 itemChield._object = field
                 itemTable.addChild(itemChield)
 
             self.availableTables.addTopLevelItem(itemTable)
 
-    def addToSelectedTables(self, _object: Union[Table, FieldTable]) -> None:
+    def addToSelectedTables(self, _object: Union[Table, FieldTable, None]) -> None:
         """Если прилетает в _object таблица, то добавляем таблицу,
         если прилетает поле таблицы, то добавляем и таблицу и поле (методом addField)"""
+
+        if _object == None:
+            self.query.addFieldQuery()
 
         if not (type(_object) in (Table, FieldTable)):
             return
@@ -170,7 +231,7 @@ class TablesAndFieldsWidget(QWidget):
         for expression in self.query.fields:
             item = QTableWidgetItem()
             item._object = expression
-            item.setText(expression.rawSqlTextWithoutAgg)
+            item.setText(expression.rawSqlText)
             # self.expressions[expression] = item
             self.selectedFields.addString([item])
 
@@ -182,14 +243,22 @@ class TablesAndFieldsWidget(QWidget):
             itemTable = QTreeWidgetItem()
             itemTable.setText(0, selectedTable.alias)
             itemTable._object = selectedTable
+            # itemTable.setExpanded(True)
+            # self.selectedTables.expandItem(itemTable)
 
             for selectedField in selectedTable.fields:
                 itemChield = QTreeWidgetItem()
-                itemChield.setText(0, selectedField.path)
+                if selectedField.fieldTable.fieldTableReference == None:
+                    itemChield.setText(0, selectedField.name)
+                else:
+                    itemChield.setText(0,
+                                       f'{selectedField.name} ({selectedField.fieldTable.fieldTableReference.table})')
+
                 itemChield._object = selectedField
                 itemTable.addChild(itemChield)
 
             self.selectedTables.addTopLevelItem(itemTable)
+            itemTable.setExpanded(True)
 
     def deleteSelectedField(self, expression: Expression) -> None:
         """NoDocumentation"""
@@ -224,13 +293,15 @@ class TablesAndFieldsWidget(QWidget):
 
     def editExpression(self, expression: Expression) -> None:
         """NoDocumentation"""
+        # if expression == None:
+        #     expression = self.query.addFieldQuery()
         self.expressonEditor = ExpressonEditor(self, self.selectedTables.clone(), expression)
         self.expressonEditor.show()
         self.expressonEditor.expressionEdited.connect(self.expressionEdited)
 
     def expressionEdited(self, expression: Expression, text: str) -> None:
         """NoDocumentation"""
-        expression.setRawSqlTextWithoutAgg(text)
+        expression.setRawSqlText(text)
         for row in range(self.selectedFields.rowCount()):
             item = self.selectedFields.item(row, 0)
             if item._object == expression:

@@ -2,10 +2,11 @@ import typing
 
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QTreeWidget, QAbstractItemView, QTreeWidgetItem, QShortcut
-from PyQt5.QtGui import QDrag, QMouseEvent
+from PyQt5.QtGui import QDrag, QMouseEvent, QCursor
 from PyQt5.QtCore import QMimeData, pyqtSignal
 from PyQt5.QtCore import Qt
 import queryConstrucorForm.queryConstructor as qc
+
 
 class XTreeWidget(QTreeWidget):
     # dragged = pyqtSignal(object)
@@ -37,7 +38,6 @@ class XTreeWidget(QTreeWidget):
         drag.setMimeData(data)
         drag.exec_()
 
-
     def dragMoveEvent(self, event: QtGui.QDragMoveEvent) -> None:
         event.accept()
 
@@ -47,24 +47,29 @@ class XTreeWidget(QTreeWidget):
             self.dropped.emit(_object)
 
     def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
+        # currentItem = self.currentItem()
+        # currentItem = self.itemAt(QCursor.pos())
+        super().mousePressEvent(event)
         currentItem = self.currentItem()
-        if currentItem == None:
-            super().mousePressEvent(event)
+
+        if currentItem == None or not hasattr(currentItem, '_object'):
             return
+
+        # self.setCurrentItem(currentItem)
+
         button = event.button()
         if button == Qt.RightButton:
             self.mouseRightButtonPressed.emit(currentItem._object)
         elif button == Qt.MiddleButton:
             self.mouseMiddleButtonPressed.emit(currentItem._object)
         else:
-            super().mousePressEvent(event)
+            return
 
     def mouseDoubleClickEvent(self, e: QtGui.QMouseEvent) -> None:
         currentItem = self.currentItem()
         if currentItem == None:
             return
         self.mouseDoubleClicked.emit(currentItem._object)
-
 
     def deleteBranch(self, _object) -> None:
         """NoDocumentation"""
@@ -93,9 +98,3 @@ class XTreeWidget(QTreeWidget):
             res.addTopLevelItem(newItem)
 
         return res
-
-
-
-
-
-

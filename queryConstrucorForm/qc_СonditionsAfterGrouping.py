@@ -7,7 +7,6 @@ from typing import Union
 from table import SelectedFieldTable, SelectedTable
 
 
-
 class ConditionsAfterGroupingWidget(QWidget):
     def __init__(self, query):
         super().__init__()
@@ -17,7 +16,7 @@ class ConditionsAfterGroupingWidget(QWidget):
         self.deleteshortcut.activated.connect(self.deleteObject)
 
         self.query = query
-        self.query.changedGroupingData.connect(self.updateData)
+        self.query.changedFieldsQuery.connect(self.updateData)
         self.layout = QHBoxLayout()
         self.setLayout(self.layout)
 
@@ -53,8 +52,6 @@ class ConditionsAfterGroupingWidget(QWidget):
         self.conditions.setHorizontalHeaderLabels(('Условия',))
         self.conditions.dropped.connect(self.addConditionFromSelectedFields)
         self.conditions.mouseDoubleClicked.connect(self.editExpression)
-
-
 
     def deleteObject(self) -> None:
         """NoDocumentation"""

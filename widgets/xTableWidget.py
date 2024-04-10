@@ -2,10 +2,11 @@ import typing
 
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QTableWidget, QAbstractItemView, QShortcut, QTableWidgetItem, QWidget
-from PyQt5.QtGui import QDrag
+from PyQt5.QtGui import QDrag, QCursor
 from PyQt5.QtCore import QMimeData, pyqtSignal, Qt
 import queryConstrucorForm.queryConstructor as qc
 from typing import Union
+
 
 class XTableWidget(QTableWidget):
     dropped = pyqtSignal(object)
@@ -22,17 +23,19 @@ class XTableWidget(QTableWidget):
 
         # self.objects = list()
 
-
     def dragEnterEvent(self, event) -> None:
         event.accept()
 
     def startDrag(self, supportedActions) -> None:
+
         drag = QDrag(self)
         data = QMimeData()
         if self.fieldForDraging != '':
             data.setText(getattr(self.currentItem(), self.fieldForDraging))
-        else:
+        elif hasattr(self.currentItem(), '_object'):
             data.setText(qc.QueryConstructor.getAddressInStorage(self.currentItem()._object))
+        else:
+            return
         drag.setMimeData(data)
         drag.exec_()
 
@@ -46,16 +49,16 @@ class XTableWidget(QTableWidget):
 
     def addString(self, string: Union[list, tuple]) -> None:
         """Добавляем строчку в таблицу"""
-        lastRow = self.rowCount()+1
+        lastRow = self.rowCount() + 1
         self.setRowCount(lastRow)
 
         for column, item in enumerate(string):
 
             if type(item) == QTableWidgetItem:
-                self.setItem(lastRow-1, column, item)
+                self.setItem(lastRow - 1, column, item)
                 # self.objects.append(item._object)
             else:
-                self.setCellWidget(lastRow-1, column, item)
+                self.setCellWidget(lastRow - 1, column, item)
 
     def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
         currentItem = self.currentItem()
@@ -67,6 +70,8 @@ class XTableWidget(QTableWidget):
             self.mouseRightButtonPressed.emit(currentItem._object)
             print('mouseRightButtonPressed')
         elif button == Qt.MiddleButton:
+            currentItem = self.itemAt(QCursor.pos())
+            self.setCurrentItem(currentItem)
             self.mouseMiddleButtonPressed.emit(currentItem._object)
             print('mouseMiddleButtonPressed')
         else:
@@ -76,9 +81,8 @@ class XTableWidget(QTableWidget):
 
     def mouseDoubleClickEvent(self, e: QtGui.QMouseEvent) -> None:
         currentItem = self.currentItem()
-        if currentItem == None:
-            return
-        self.mouseDoubleClicked.emit(currentItem._object)
+        if currentItem != None:
+            self.mouseDoubleClicked.emit(currentItem._object)
 
     def deleteObject(self) -> None:
         """NoDocumentation"""
@@ -88,14 +92,12 @@ class XTableWidget(QTableWidget):
             return
         self.delete.emit(currentItem._object)
 
-
     def deleteString(self, _object) -> None:
         """NoDocumentation"""
         for row in range(self.rowCount()):
             if self.item(row, 0)._object == _object:
                 self.removeRow(row)
                 return
-
 
     def clone(self) -> "XTableWidget":
         """NoDocumentation"""
@@ -111,6 +113,3 @@ class XTableWidget(QTableWidget):
                 res.setItem(row, column, newItem)
 
         return res
-
-
-

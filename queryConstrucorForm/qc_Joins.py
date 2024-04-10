@@ -13,9 +13,11 @@ from widgets.expressionEditor import ExpressonEditor
 import pandas as pd
 import xQuery
 
+
 class XComboBox(QComboBox):
     def __init__(self):
         super().__init__()
+
 
 class XLineEdit(QLineEdit):
     selectedJoin = pyqtSignal(object)
@@ -27,6 +29,7 @@ class XLineEdit(QLineEdit):
         self.selectedJoin.emit(self.join)
         super().mousePressEvent(e)
 
+
 class JoinsWidget(QWidget):
     def __init__(self, query: "XQuery"):
         super().__init__()
@@ -37,6 +40,7 @@ class JoinsWidget(QWidget):
 
         self.currentJoin = None
         self.query = query
+        self.query.changedJoins.connect(self.updateData)
         self.layout = QHBoxLayout()
         self.setLayout(self.layout)
 
@@ -52,7 +56,7 @@ class JoinsWidget(QWidget):
         self.joinsWidget.layout().addWidget(self.joinsPanelWidget)
 
         self.addJoinButton = QPushButton('+')
-        self.addJoinButton.clicked.connect(self.addJoin)
+        self.addJoinButton.clicked.connect(self.addJoinAuto)
         self.joinsPanelWidget.layout().addWidget(self.addJoinButton)
         self.joinsPanelWidget.layout().addStretch()
         self.joinsPanelWidget.layout().setContentsMargins(0, 0, 0, 0)
@@ -84,6 +88,10 @@ class JoinsWidget(QWidget):
         self.conditionsWidget.layout().addWidget(self.conditionsJoin)
         self.conditionsJoin.mouseDoubleClicked.connect(self.editExpression)
 
+    def updateData(self):
+        for join in self.query.joins:
+            self.addJoin(join)
+
     def editExpression(self, expression: Expression) -> None:
         """NoDocumentation"""
         self.selectedTables = XTreeWidget()
@@ -112,11 +120,12 @@ class JoinsWidget(QWidget):
             expression = currentItem._object
             self.conditionsJoin.removeRow(currentRow)
             self.currentJoin.conditions.remove(expression)
+            type(self.query).updateTextQueries()
         else:
             currentRow = self.joins.currentRow()
             if currentRow < 0:
                 return
-            join = self.query.unions[currentRow]
+            join = self.query.joins[currentRow]
             self.joins.removeRow(currentRow)
             self.query.deleteJoin(join)
             if self.joins.rowCount() != 0:
@@ -126,7 +135,6 @@ class JoinsWidget(QWidget):
                 self.setCurrentJoin(None)
 
         self.updateConditionsJoin()
-
 
     def addCondition(self) -> None:
         """NoDocumentation"""
@@ -154,11 +162,13 @@ class JoinsWidget(QWidget):
         expression.setRawSqlText(text)
         self.updateConditionsJoin()
 
-    def addJoin(self) -> None:
+    def addJoinAuto(self) -> None:
         """NoDocumentation"""
-        join = self.query.addJoinAuto()
-        if join == None:
-            return
+        join = self.query.addJoinAuto(True)
+        if join != None:
+            self.addJoin(join)
+
+    def addJoin(self, join):
         row = self.joins.rowCount()
         self.joins.setRowCount(row + 1)
 
@@ -191,7 +201,6 @@ class JoinsWidget(QWidget):
         if self.currentJoin == None:
             self.currentJoin = self.query.joins[0]
             self.updateConditionsJoin()
-
 
     def getComboBoxTableSelection(self, join, row: int, column: int) -> XComboBox:
         """NoDocumentation"""
@@ -233,7 +242,6 @@ class JoinsWidget(QWidget):
                 join.setTable1(join.table2, noSignal=True)
             join.setTable2(newTable2)
 
-
     def getComboBoxTypeJoinSelection(self, join) -> XComboBox:
         """NoDocumentation"""
         res = XComboBox()
@@ -274,7 +282,3 @@ class JoinsWidget(QWidget):
         comboBox: XComboBox = self.sender()
         join = comboBox.join
         join.setTypeJoin(comboBox.currentText())
-
-
-
-

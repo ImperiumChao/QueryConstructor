@@ -7,10 +7,14 @@ from typing import Union
 from expression import Expression
 from table import SelectedFieldTable
 
+
 class ExpressonEditor(QDialog):
     expressionEdited = pyqtSignal(object, str)
-    def __init__(self, parent: QWidget, availablesFields: Union[XTreeWidget, XTableWidget], expression: Expression, fieldForDraging: str = 'path'):
+
+    def __init__(self, parent: QWidget, availablesFields: Union[XTreeWidget, XTableWidget], expression: Expression,
+                 fieldForDraging: str = 'path'):
         super().__init__(parent)
+        self.setWindowTitle(' ')
         self.expression = expression
         self.setLayout(QVBoxLayout())
         self.area1 = QWidget()
@@ -37,7 +41,7 @@ class ExpressonEditor(QDialog):
         self.layout().addWidget(self.buttons)
         self.buttons.rejected.connect(lambda: self.close())
         self.buttons.accepted.connect(self.acceptExpression)
-
+        self.textEdit.setFocus()
 
     def acceptExpression(self) -> None:
         """NoDocumentation"""

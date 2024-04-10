@@ -22,12 +22,15 @@ class UnionsAndAliases(QWidget):
         self.setLayout(layout)
 
         self.query = query
+        self.currentQuery = query
         self.unionsWidget = QWidget()
         self.unionsWidget.setLayout(QVBoxLayout())
+        self.unionsWidget.layout().setContentsMargins(0, 0, 0, 0)
 
         self.unionsPanelWidget = QWidget()
         self.unionsPanelWidget.setLayout(QHBoxLayout())
         self.addUnionButton = QPushButton('+')
+        self.addUnionButton.setMaximumWidth(40)
         self.addUnionButton.pressed.connect(self.addUnionQuery)
         self.unionsPanelWidget.layout().addWidget(self.addUnionButton)
         self.unionsPanelWidget.layout().addStretch()
@@ -46,14 +49,17 @@ class UnionsAndAliases(QWidget):
 
         self.aliasesPanelWidget = QWidget()
         self.aliasesPanelWidget.setLayout(QHBoxLayout())
+        self.aliasesPanelWidget.layout().setContentsMargins(0, 0, 0, 0)
         self.aliasesWidget.layout().addWidget(self.aliasesPanelWidget)
 
         self.moveAliasUpButton = QPushButton()
+        self.moveAliasUpButton.setMaximumWidth(40)
         self.moveAliasUpButton.setText("↑")
         self.moveAliasUpButton.clicked.connect(lambda: self.moveField(True))
         self.aliasesPanelWidget.layout().addWidget(self.moveAliasUpButton)
 
         self.moveAliasDownButton = QPushButton()
+        self.moveAliasDownButton.setMaximumWidth(40)
         self.moveAliasDownButton.setText("↓")
         self.moveAliasDownButton.clicked.connect(lambda: self.moveField(False))
 
@@ -67,18 +73,22 @@ class UnionsAndAliases(QWidget):
 
         self.fieldsCurrentQueryWidget = QWidget()
         self.fieldsCurrentQueryWidget.setLayout(QVBoxLayout())
+        self.fieldsCurrentQueryWidget.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.fieldsCurrentQueryWidget)
 
         self.currentQueryPanelWidget = QWidget()
         self.currentQueryPanelWidget.setLayout(QHBoxLayout())
+        self.currentQueryPanelWidget.setContentsMargins(0, 0, 0, 0)
         self.fieldsCurrentQueryWidget.layout().addWidget(self.currentQueryPanelWidget)
 
         self.moveFieldCurrentQueryUpButton = QPushButton()
+        self.moveFieldCurrentQueryUpButton.setMaximumWidth(40)
         self.moveFieldCurrentQueryUpButton.setText("↑")
         self.moveFieldCurrentQueryUpButton.clicked.connect(lambda: self.moveFieldCurrentQuery(True))
         self.currentQueryPanelWidget.layout().addWidget(self.moveFieldCurrentQueryUpButton)
 
         self.moveFieldCurrentQueryDownButton = QPushButton()
+        self.moveFieldCurrentQueryDownButton.setMaximumWidth(40)
         self.moveFieldCurrentQueryDownButton.setText("↓")
         self.moveFieldCurrentQueryDownButton.clicked.connect(lambda: self.moveFieldCurrentQuery(False))
         self.currentQueryPanelWidget.layout().addWidget(self.moveFieldCurrentQueryDownButton)
@@ -116,7 +126,7 @@ class UnionsAndAliases(QWidget):
         # self.tabsConstructorQuery.setCurrentIndex(0)
         # self.tabsUnionsTablesAndFields.setCurrentIndex(numQuery - 1)
         #
-        # self.currentQuery = query
+        self.currentQuery = query
         self.updateData()
 
     def selectCurrentQuery(self, row, column) -> None:
@@ -191,10 +201,14 @@ class UnionsAndAliases(QWidget):
         self.moveFildTable(self.fieldsCurrentQuery, row, up)
 
         self.fieldsCurrentQuery.setCurrentItem(self.fieldsCurrentQuery.item(newRow, 0))
-        self.currentQuery.moveField(row, up, True)
+        self.currentQuery.moveField(row, up, withAlias=False, noSignal=True)
 
     def updateData(self) -> None:
         """NoDocumentation"""
+        currentItemUnions = self.unions.currentItem()
+        currentItemAliases = self.aliases.currentItem()
+        currentItemFields = self.fieldsCurrentQuery.currentItem()
+
         self.unions.clear()
         self.unions.setColumnCount(2)
         self.unions.horizontalHeader().setStretchLastSection(True)
@@ -213,7 +227,9 @@ class UnionsAndAliases(QWidget):
         self.unions.setItem(0, 1, itm)
 
         for n, union in enumerate(self.query.unions):
+            self.unions.setItem(n + 1, 0, QTableWidgetItem())
             self.unions.setCellWidget(n + 1, 0, self.getComboBoxTypeUnionSelection(union))
+            self.unions.item(n + 1, 0)._object = union.query
 
             itm = QTableWidgetItem()
             itm.setText(f'Запрос {str(n + 2)}')
@@ -246,6 +262,14 @@ class UnionsAndAliases(QWidget):
             itm.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             self.fieldsCurrentQuery.setItem(n, 0, itm)
             n += 1
+
+        for currentItem, table in ((currentItemUnions, self.unions),
+                                   (currentItemAliases, self.aliases),
+                                   (currentItemFields, self.fieldsCurrentQuery)):
+            if currentItem != None:
+                for row in range(table.rowCount()):
+                    if currentItem._object == table.item(row, 0)._object:
+                        table.setCurrentItem(table.item(row, 0))
 
     def getComboBoxTypeUnionSelection(self, union) -> QComboBox:
         """NoDocumentation"""
